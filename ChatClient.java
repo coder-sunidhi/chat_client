@@ -36,35 +36,33 @@ public class ChatClient extends JFrame {
         chatArea.setFont(new Font("SansSerif", Font.PLAIN, 14));
 
         add(new JScrollPane(chatArea), BorderLayout.CENTER);
-        add(createControlPanel(), BorderLayout.NORTH);
-        add(createInputPanel(), BorderLayout.SOUTH);
+        add(createTopPanel(), BorderLayout.NORTH);
+        add(createBottomPanel(), BorderLayout.SOUTH);
 
-        setupActionListeners();
+        setupListeners();
         setVisible(true);
     }
 
-    private JPanel createControlPanel() {
-        JPanel panel = new JPanel();
-        panel.add(connectButton);
-        panel.add(disconnectButton);
+    private JPanel createTopPanel() {
+        JPanel p = new JPanel();
+        p.add(connectButton);
+        p.add(disconnectButton);
         disconnectButton.setEnabled(false);
-        return panel;
+        return p;
     }
 
-    private JPanel createInputPanel() {
-        JPanel panel = new JPanel(new BorderLayout());
-        panel.add(messageField, BorderLayout.CENTER);
-        panel.add(new JButton("Send") {{
-            addActionListener(e -> sendMessage());
-        }}, BorderLayout.EAST);
+    private JPanel createBottomPanel() {
+        JPanel inputPanel = new JPanel(new BorderLayout());
+        inputPanel.add(messageField, BorderLayout.CENTER);
+        inputPanel.add(new JButton("Send"){{addActionListener(e -> sendMessage());}}, BorderLayout.EAST);
 
-        JPanel container = new JPanel(new BorderLayout());
-        container.add(panel, BorderLayout.CENTER);
-        container.add(statusLabel, BorderLayout.SOUTH);
-        return container;
+        JPanel bottom = new JPanel(new BorderLayout());
+        bottom.add(inputPanel, BorderLayout.CENTER);
+        bottom.add(statusLabel, BorderLayout.SOUTH);
+        return bottom;
     }
 
-    private void setupActionListeners() {
+    private void setupListeners() {
         connectButton.addActionListener(e -> connect());
         disconnectButton.addActionListener(e -> disconnect());
         messageField.addActionListener(e -> sendMessage());
@@ -80,19 +78,19 @@ public class ChatClient extends JFrame {
 
             running = true;
             updateStatus("Connected", Color.GREEN);
-            appendToChat("✅ Connected to server!");
+            appendToChat("✅ Connected!");
 
             connectButton.setEnabled(false);
             disconnectButton.setEnabled(true);
 
-            startReceiver();
+            startReceiverThread();
 
-        } catch (IOException ex) {
-            JOptionPane.showMessageDialog(this, "Connection failed: " + ex.getMessage());
+        } catch (IOException e) {
+            JOptionPane.showMessageDialog(this, "Failed to connect: " + e.getMessage());
         }
     }
 
-    private void startReceiver() {
+    private void startReceiverThread() {
         receiveThread = new Thread(() -> {
             try {
                 String msg;
@@ -100,7 +98,7 @@ public class ChatClient extends JFrame {
                     appendToChat(msg);
                 }
             } catch (IOException e) {
-                if (running) appendToChat("⚠️ Connection lost");
+                if (running) appendToChat("Connection lost");
             }
         });
         receiveThread.start();
@@ -108,16 +106,12 @@ public class ChatClient extends JFrame {
 
     private void disconnect() {
         running = false;
-
         if (output != null) {
             try { output.println("exit"); } catch (Exception ignored) {}
         }
 
-        // Robust thread stopping
         if (receiveThread != null) {
-            try {
-                receiveThread.join(600);
-            } catch (InterruptedException ignored) {}
+            try { receiveThread.join(500); } catch (InterruptedException ignored) {}
         }
 
         closeAllResources();
@@ -132,14 +126,16 @@ public class ChatClient extends JFrame {
     private void closeAllResources() {
         closeQuietly(output);
         closeQuietly(input);
-        closeQuietly(socket);
+        closeQuietly(socket);           // ← Explicitly closing all
         output = null;
         input = null;
         socket = null;
     }
 
-    private void closeQuietly(AutoCloseable r) {
-        try { if (r != null) r.close(); } catch (Exception ignored) {}
+    private void closeQuietly(AutoCloseable resource) {
+        try {
+            if (resource != null) resource.close();
+        } catch (Exception ignored) {}
     }
 
     private boolean isConnected() {
