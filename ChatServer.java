@@ -1,110 +1,74 @@
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
-import java.net.ServerSocket;
-import java.net.Socket;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.io.*;
+import java.net.*;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 
 /**
- * Chat Server
- * Accepts multiple client connections and broadcasts messages.
+ * Simple Multi Client Chat Server
  */
 public class ChatServer {
 
-    private static final int DEFAULT_PORT = 5000;
+    private static final int PORT = 5000;
+
+    private static final ExecutorService executor =
+            Executors.newCachedThreadPool();
+
+    private static final ClientManager clientManager =
+            new ClientManager();
 
     public static void main(String[] args) {
 
-        int port = DEFAULT_PORT;
-
-        if (args.length > 0) {
-            port = Integer.parseInt(args[0]);
-        }
-
-        ExecutorService executorService =
-                Executors.newFixedThreadPool(
-                        Runtime.getRuntime().availableProcessors() * 2);
-
-        ClientManager clientManager =
-                new ClientManager();
-
-        System.out.println("Starting server...");
+        System.out.println("=================================");
+        System.out.println("      CHAT SERVER STARTED");
+        System.out.println("=================================");
 
         try (ServerSocket serverSocket =
-                     new ServerSocket(port)) {
+                     new ServerSocket(PORT)) {
 
-            System.out.println("Server started on port "
-                    + port);
+            System.out.println("Listening on Port : " + PORT);
 
             while (true) {
 
-                try {
+                Socket clientSocket =
+                        serverSocket.accept();
 
-                    Socket clientSocket =
-                            serverSocket.accept();
+                System.out.println(
+                        "New Client Connected : "
+                                + clientSocket.getInetAddress());
 
-                    ClientHandler handler =
-                            new ClientHandler(
-                                    clientSocket,
-                                    clientManager);
-
-                    executorService.execute(handler);
-
-                } catch (IOException e) {
-
-                    System.out.println(
-                            "Client connection error : "
-                                    + e.getMessage());
-                }
+                executor.execute(
+                        new ClientHandler(
+                                clientSocket,
+                                clientManager));
             }
 
         } catch (IOException e) {
 
             System.out.println(
-                    "Server error : "
+                    "Server Error : "
                             + e.getMessage());
 
         } finally {
 
-            executorService.shutdown();
-
-            try {
-
-                if (!executorService.awaitTermination(
-                        5,
-                        TimeUnit.SECONDS)) {
-
-                    executorService.shutdownNow();
-                }
-
-            } catch (InterruptedException e) {
-
-                executorService.shutdownNow();
-                Thread.currentThread().interrupt();
-            }
+            executor.shutdown();
         }
     }
 
     /**
-     * Thread-safe client manager.
+     * Stores connected clients.
      */
     static class ClientManager {
 
-        private final List<PrintWriter> clients =
-                Collections.synchronizedList(
-                        new ArrayList<>());
+        private final Set<PrintWriter> clients =
+                new CopyOnWriteArraySet<>();
 
         /**
          * Adds a client.
          */
-        public synchronized void addClient(
+        public void addClient(
                 PrintWriter writer) {
 
             clients.add(writer);
@@ -113,74 +77,65 @@ public class ChatServer {
         /**
          * Removes a client.
          */
-        public synchronized void removeClient(
+        public void removeClient(
                 PrintWriter writer) {
 
             clients.remove(writer);
         }
 
         /**
-         * Broadcasts message to all clients.
+         * Broadcasts message.
          */
-        public synchronized void broadcast(
+        public void broadcast(
                 String message) {
 
-            synchronized (clients) {
+            for (PrintWriter writer : clients) {
 
-                for (PrintWriter writer : clients) {
-
-                    try {
-
-                        writer.println(message);
-
-                    } catch (Exception ignored) {
-                    }
-                }
+                writer.println(message);
             }
         }
     }
 
     /**
-     * Handles one client connection.
+     * Handles one connected client.
      */
     static class ClientHandler
             implements Runnable {
 
         private final Socket socket;
 
-        private final ClientManager clientManager;
+        private final ClientManager manager;
 
-        private PrintWriter outputWriter;
+        private PrintWriter output;
+
+        private BufferedReader input;
 
         private String clientName;
 
         public ClientHandler(
                 Socket socket,
-                ClientManager clientManager) {
+                ClientManager manager) {
 
             this.socket = socket;
-            this.clientManager = clientManager;
+            this.manager = manager;
         }
 
         @Override
         public void run() {
 
-            BufferedReader inputReader = null;
-
             try {
 
-                inputReader =
+                input =
                         new BufferedReader(
                                 new InputStreamReader(
                                         socket.getInputStream()));
 
-                outputWriter =
+                output =
                         new PrintWriter(
                                 socket.getOutputStream(),
                                 true);
 
-                clientManager.addClient(
-                        outputWriter);
+                manager.addClient(output);
 
                 clientName =
                         "Client-"
@@ -188,27 +143,22 @@ public class ChatServer {
                                 .toString()
                                 .substring(0,8);
 
-                clientManager.broadcast(
+                manager.broadcast(
                         clientName
                                 + " joined the chat.");
 
                 String message;
 
-                while (true) {
-
-                    message =
-                            inputReader.readLine();
-
-                    if (message == null) {
-                        break;
-                    }
+                while ((message =
+                        input.readLine()) != null) {
 
                     if (message.equalsIgnoreCase(
                             "exit")) {
+
                         break;
                     }
 
-                    clientManager.broadcast(
+                    manager.broadcast(
                             clientName
                                     + " : "
                                     + message);
@@ -220,46 +170,42 @@ public class ChatServer {
                         clientName
                                 + " disconnected.");
 
-            } finally {                if (outputWriter != null) {
+            } finally {                if (output != null) {
 
-                    clientManager.removeClient(
-                            outputWriter);
+                    manager.removeClient(output);
 
-                    clientManager.broadcast(
+                    manager.broadcast(
                             clientName
                                     + " left the chat.");
+
+                    output.close();
                 }
 
-                if (inputReader != null) {
+                try {
 
-                    try {
+                    if (input != null) {
 
-                        inputReader.close();
-
-                    } catch (IOException e) {
-
-                        System.out.println(
-                                "Error closing input stream.");
+                        input.close();
                     }
+
+                } catch (IOException e) {
+
+                    System.out.println(
+                            "Unable to close input stream.");
                 }
 
-                if (outputWriter != null) {
+                try {
 
-                    outputWriter.close();
-                }
-
-                if (socket != null &&
-                        !socket.isClosed()) {
-
-                    try {
+                    if (socket != null &&
+                            !socket.isClosed()) {
 
                         socket.close();
-
-                    } catch (IOException e) {
-
-                        System.out.println(
-                                "Error closing socket.");
                     }
+
+                } catch (IOException e) {
+
+                    System.out.println(
+                            "Unable to close socket.");
                 }
             }
         }
