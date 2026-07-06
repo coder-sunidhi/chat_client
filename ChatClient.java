@@ -5,277 +5,141 @@ import java.net.*;
 
 public class ChatClient extends JFrame {
 
-    // Constants (removes hardcoded values)
     private static final String HOST = "localhost";
     private static final int PORT = 5000;
 
     private JTextArea chatArea;
     private JTextField messageField;
-
     private JButton sendButton;
     private JButton connectButton;
     private JButton disconnectButton;
-
     private JLabel statusLabel;
 
     private Socket socket;
     private BufferedReader input;
     private PrintWriter output;
+    private Thread receiveThread;
 
     public ChatClient() {
         initializeUI();
     }
 
-    // UI Design
     private void initializeUI() {
-
-        setTitle("Simple Chat Client");
-        setSize(600,500);
-
+        setTitle("Chat Client");
+        setSize(700, 500);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
 
         chatArea = new JTextArea();
         chatArea.setEditable(false);
+        chatArea.setFont(new Font("SansSerif", Font.PLAIN, 14));
 
-        JScrollPane scrollPane =
-                new JScrollPane(chatArea);
+        JScrollPane scrollPane = new JScrollPane(chatArea);
 
         messageField = new JTextField();
-
         sendButton = new JButton("Send");
         connectButton = new JButton("Connect");
         disconnectButton = new JButton("Disconnect");
+        disconnectButton.setEnabled(false);
 
-        statusLabel =
-                new JLabel("Disconnected");
+        statusLabel = new JLabel("Disconnected");
+        statusLabel.setHorizontalAlignment(JLabel.CENTER);
 
-        JPanel topPanel =
-                new JPanel();
-
+        // Top panel
+        JPanel topPanel = new JPanel();
         topPanel.add(connectButton);
         topPanel.add(disconnectButton);
 
-        JPanel bottomPanel =
-                new JPanel(new BorderLayout());
+        // Bottom panel
+        JPanel bottomPanel = new JPanel(new BorderLayout());
+        bottomPanel.add(messageField, BorderLayout.CENTER);
+        bottomPanel.add(sendButton, BorderLayout.EAST);
 
-        bottomPanel.add(
-                messageField,
-                BorderLayout.CENTER
-        );
+        JPanel southPanel = new JPanel(new BorderLayout());
+        southPanel.add(bottomPanel, BorderLayout.CENTER);
+        southPanel.add(statusLabel, BorderLayout.SOUTH);
 
-        bottomPanel.add(
-                sendButton,
-                BorderLayout.EAST
-        );
+        add(topPanel, BorderLayout.NORTH);
+        add(scrollPane, BorderLayout.CENTER);
+        add(southPanel, BorderLayout.SOUTH);
 
-        JPanel mainBottomPanel =
-                new JPanel(new BorderLayout());
-
-        mainBottomPanel.add(
-                bottomPanel,
-                BorderLayout.CENTER
-        );
-
-        mainBottomPanel.add(
-                statusLabel,
-                BorderLayout.SOUTH
-        );
-
-        add(topPanel,
-                BorderLayout.NORTH);
-
-        add(scrollPane,
-                BorderLayout.CENTER);
-
-        add(mainBottomPanel,
-                BorderLayout.SOUTH);
-
-        connectButton.addActionListener(
-                e -> connect()
-        );
-
-        disconnectButton.addActionListener(
-                e -> disconnect()
-        );
-
-        sendButton.addActionListener(
-                e -> sendMessage()
-        );
+        // Action listeners
+        connectButton.addActionListener(e -> connect());
+        disconnectButton.addActionListener(e -> disconnect());
+        sendButton.addActionListener(e -> sendMessage());
+        messageField.addActionListener(e -> sendMessage());
 
         setVisible(true);
     }
 
-    // Connection
     private void connect() {
+        if (socket != null && socket.isConnected()) {
+            JOptionPane.showMessageDialog(this, "Already connected!");
+            return;
+        }
 
         try {
+            socket = new Socket(HOST, PORT);
+            input = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            output = new PrintWriter(socket.getOutputStream(), true);
 
-            if(socket != null &&
-                    socket.isConnected()) {
-
-                JOptionPane.showMessageDialog(
-                        this,
-                        "Already Connected"
-                );
-                return;
-            }
-
-            socket =
-                    new Socket(HOST,PORT);
-
-            input =
-                    new BufferedReader(
-                            new InputStreamReader(
-                                    socket.getInputStream()
-                            )
-                    );
-
-            output =
-                    new PrintWriter(
-                            socket.getOutputStream(),
-                            true
-                    );
-
-            statusLabel.setText(
-                    "Connected"
-            );
-
-            chatArea.append(
-                    "Connected to server\n"
-            );
+            statusLabel.setText("Connected");
+            statusLabel.setForeground(Color.GREEN);
+            chatArea.append("✅ Connected to server!\n");
+            connectButton.setEnabled(false);
+            disconnectButton.setEnabled(true);
 
             receiveMessages();
 
-        }
-
-        catch(IOException e){
-
-            JOptionPane.showMessageDialog(
-                    this,
-                    "Connection Failed"
-            );
+        } catch (IOException e) {
+            JOptionPane.showMessageDialog(this, "Connection failed: " + e.getMessage());
         }
     }
 
-    // Send message
     private void sendMessage() {
+        String message = messageField.getText().trim();
+        if (message.isEmpty() || output == null) return;
 
         try {
-
-            String message =
-                    messageField.getText().trim();
-
-            if(message.isEmpty()) {
-                return;
-            }
-
-            if(output == null) {
-
-                JOptionPane.showMessageDialog(
-                        this,
-                        "Not connected"
-                );
-
-                return;
-            }
-
             output.println(message);
-
-            chatArea.append(
-                    "You: " +
-                    message +
-                    "\n"
-            );
-
+            chatArea.append("You: " + message + "\n");
             messageField.setText("");
-
-        }
-
-        catch(Exception e){
-
-            JOptionPane.showMessageDialog(
-                    this,
-                    "Sending Failed"
-            );
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this, "Failed to send message");
         }
     }
 
-    // Receive messages
     private void receiveMessages() {
-
-        Thread thread =
-                new Thread(() -> {
-
-                    try {
-
-                        String msg;
-
-                        while(
-                                (msg=input.readLine())
-                                        != null
-                        ) {
-
-                            chatArea.append(
-                                    "Server: "
-                                    + msg
-                                    + "\n"
-                            );
-                        }
-
-                    }
-
-                    catch(IOException e){
-
-                        chatArea.append(
-                                "Connection closed\n"
-                        );
-                    }
-
-                });
-
-        thread.start();
+        receiveThread = new Thread(() -> {
+            try {
+                String msg;
+                while ((msg = input.readLine()) != null) {
+                    chatArea.append(msg + "\n");
+                }
+            } catch (IOException e) {
+                if (socket != null && !socket.isClosed()) {
+                    chatArea.append("⚠️ Connection lost\n");
+                }
+            }
+        });
+        receiveThread.start();
     }
 
-    // Proper disconnect method
     private void disconnect() {
-
         try {
+            if (output != null) output.close();
+            if (input != null) input.close();
+            if (socket != null && !socket.isClosed()) socket.close();
 
-            if(output != null){
-                output.close();
-            }
+            chatArea.append("Disconnected from server.\n");
+            statusLabel.setText("Disconnected");
+            statusLabel.setForeground(Color.RED);
 
-            if(input != null){
-                input.close();
-            }
-
-            if(socket != null &&
-                    !socket.isClosed()) {
-
-                socket.close();
-            }
-
-            statusLabel.setText(
-                    "Disconnected"
-            );
-
-            chatArea.append(
-                    "Disconnected\n"
-            );
-
-        }
-
-        catch(IOException e){
-
-            JOptionPane.showMessageDialog(
-                    this,
-                    "Error during disconnect"
-            );
-        }
-
-        finally {
-
+        } catch (IOException e) {
+            JOptionPane.showMessageDialog(this, "Error while disconnecting");
+        } finally {
+            connectButton.setEnabled(true);
+            disconnectButton.setEnabled(false);
             output = null;
             input = null;
             socket = null;
@@ -283,10 +147,6 @@ public class ChatClient extends JFrame {
     }
 
     public static void main(String[] args) {
-
-        SwingUtilities.invokeLater(
-                ChatClient::new
-        );
-
+        SwingUtilities.invokeLater(ChatClient::new);
     }
 }
