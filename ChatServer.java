@@ -4,52 +4,104 @@ import java.net.Socket;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+/**
+ * Main server class.
+ */
 public class ChatServer {
 
-    private static final int PORT = 5000;
+    private static final int DEFAULT_PORT = 5000;
 
-    public static void main(String[] args) {
+    private final ExecutorService executorService;
+    private final ClientManager clientManager;
 
-        ExecutorService executor =
+    public ChatServer() {
+
+        executorService =
                 Executors.newCachedThreadPool();
 
-        ClientManager manager =
+        clientManager =
                 new ClientManager();
+    }
 
-        System.out.println("=================================");
-        System.out.println(" Chat Server Started ");
-        System.out.println(" Listening on Port : " + PORT);
-        System.out.println("=================================");
+    /**
+     * Starts the server.
+     */
+    public void startServer(int port) {
 
         try (ServerSocket serverSocket =
-                     new ServerSocket(PORT)) {
+                     new ServerSocket(port)) {
+
+            LoggerUtil.info(
+                    "Server started on port "
+                            + port);
 
             while (true) {
 
-                Socket clientSocket =
+                Socket socket =
                         serverSocket.accept();
 
-                System.out.println(
-                        "Client Connected : "
-                                + clientSocket.getInetAddress());
+                LoggerUtil.info(
+                        "Client connected : "
+                                + socket.getInetAddress());
 
                 ClientHandler handler =
                         new ClientHandler(
-                                clientSocket,
-                                manager);
+                                socket,
+                                clientManager);
 
-                executor.execute(handler);
+                executorService.execute(
+                        handler);
             }
 
         } catch (IOException e) {
 
-            System.out.println(
-                    "Server Error : "
-                            + e.getMessage());
+            LoggerUtil.error(
+                    "Server Error",
+                    e);
 
         } finally {
 
-            executor.shutdown();
+            shutdownExecutor();
         }
+    }
+
+    /**
+     * Stops thread pool.
+     */
+    private void shutdownExecutor() {
+
+        executorService.shutdown();
+
+        LoggerUtil.info(
+                "Executor Service Stopped.");
+    }
+
+    /**
+     * Application entry point.
+     */
+    public static void main(
+            String[] args) {
+
+        int port = DEFAULT_PORT;
+
+        if (args.length > 0) {
+
+            try {
+
+                port =
+                        Integer.parseInt(
+                                args[0]);
+
+            } catch (NumberFormatException e) {
+
+                LoggerUtil.warning(
+                        "Invalid port. Using default.");
+            }
+        }
+
+        ChatServer server =
+                new ChatServer();
+
+        server.startServer(port);
     }
 }
