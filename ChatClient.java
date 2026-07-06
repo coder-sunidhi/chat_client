@@ -248,13 +248,22 @@ public class ChatClient extends JFrame {
         }
     }
 
-    private void startReceiverThread() {
+    private final ThreadFactory receiverThreadFactory =
+        runnable -> {
+            Thread thread =
+                    new Thread(runnable);
+
+            thread.setDaemon(true);
+            thread.setName("MessageReceiver");
+
+            return thread;
+        };
+
+private void startReceiverThread() {
 
     receiveThread =
-            new Thread(
+            receiverThreadFactory.newThread(
                     new MessageReceiver());
-
-    receiveThread.setDaemon(true);
 
     receiveThread.start();
 }
