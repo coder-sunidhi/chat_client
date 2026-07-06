@@ -6,8 +6,6 @@ import java.util.concurrent.*;
 public class ChatServer {
 
     private static final int PORT = 5000;
-    
-    // Better concurrency: CopyOnWriteArraySet
     private static final Set<PrintWriter> clientWriters = 
             ConcurrentHashMap.newKeySet();
 
@@ -53,7 +51,10 @@ public class ChatServer {
                 in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
                 out = new PrintWriter(socket.getOutputStream(), true);
 
-                clientWriters.add(out);
+                synchronized (clientWriters) {
+                    clientWriters.add(out);
+                }
+
                 clientName = "Client-" + clientWriters.size();
 
                 System.out.println(clientName + " connected");
@@ -61,7 +62,7 @@ public class ChatServer {
 
                 String message;
                 while ((message = in.readLine()) != null) {
-                    if (message.equalsIgnoreCase("exit")) {
+                    if ("exit".equalsIgnoreCase(message.trim())) {
                         break;
                     }
                     broadcast(clientName + ": " + message);
@@ -75,14 +76,20 @@ public class ChatServer {
 
         private void cleanup() {
             if (out != null) {
-                clientWriters.remove(out);
+                synchronized (clientWriters) {
+                    clientWriters.remove(out);
+                }
             }
             if (clientName != null) {
                 broadcast(clientName + " has left the chat.");
             }
+            closeQuietly(socket);
+        }
+
+        private void closeQuietly(Socket s) {
             try {
-                if (socket != null && !socket.isClosed()) {
-                    socket.close();
+                if (s != null && !s.isClosed()) {
+                    s.close();
                 }
             } catch (IOException ignored) {}
         }
