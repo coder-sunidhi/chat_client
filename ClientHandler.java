@@ -6,7 +6,7 @@ import java.net.Socket;
 import java.util.UUID;
 
 /**
- * Handles communication with one client.
+ * Handles communication with a single client.
  */
 public class ClientHandler implements Runnable {
 
@@ -16,11 +16,10 @@ public class ClientHandler implements Runnable {
     private BufferedReader input;
     private PrintWriter output;
 
-    private String clientName;
+    private String clientId;
 
-    public ClientHandler(
-            Socket socket,
-            ClientManager clientManager) {
+    public ClientHandler(Socket socket,
+                         ClientManager clientManager) {
 
         this.socket = socket;
         this.clientManager = clientManager;
@@ -33,13 +32,13 @@ public class ClientHandler implements Runnable {
 
             initializeClient();
 
-            receiveMessages();
+            processMessages();
 
         } catch (IOException e) {
 
-            System.out.println(
-                    "Connection Error : "
-                            + e.getMessage());
+            LoggerUtil.error(
+                    "Client communication failed.",
+                    e);
 
         } finally {
 
@@ -48,100 +47,125 @@ public class ClientHandler implements Runnable {
     }
 
     /**
-     * Initializes client resources.
+     * Initializes the client.
      */
     private void initializeClient()
             throws IOException {
 
-        input =
-                new BufferedReader(
-                        new InputStreamReader(
-                                socket.getInputStream()));
+        input = new BufferedReader(
+                new InputStreamReader(
+                        socket.getInputStream()));
 
-        output =
-                new PrintWriter(
-                        socket.getOutputStream(),
-                        true);
+        output = new PrintWriter(
+                socket.getOutputStream(),
+                true);
 
-        clientManager.addClient(output);
+        clientId = UUID.randomUUID()
+                .toString()
+                .substring(0, 8);
 
-        clientName =
-                "Client-"
-                        + UUID.randomUUID()
-                        .toString()
-                        .substring(0, 8);
+        clientManager.addClient(
+                clientId,
+                output);
 
         clientManager.broadcast(
-                clientName
-                        + " joined the chat.");
+                clientId + " joined the chat.");
 
-        System.out.println(
-                clientName
-                        + " connected.");
+        LoggerUtil.info(
+                clientId + " connected.");
     }
 
     /**
-     * Receives messages continuously.
+     * Reads incoming messages.
      */
-    private void receiveMessages()
+    private void processMessages()
             throws IOException {
 
         String message;
 
-        while ((message =
-                input.readLine()) != null) {
+        while ((message = input.readLine()) != null) {
 
-            if (message.trim()
-                    .equalsIgnoreCase("exit")) {
+            if ("exit".equalsIgnoreCase(
+                    message.trim())) {
 
                 break;
             }
 
             clientManager.broadcast(
-                    clientName
-                            + " : "
-                            + message);
+                    clientId + " : " + message);
         }
     }
 
     /**
-     * Disconnects client safely.
+     * Disconnects the client safely.
      */
     private void disconnectClient() {
 
-        try {
+        clientManager.removeClient(
+                clientId);
 
-            if (output != null) {
+        clientManager.broadcast(
+                clientId + " left the chat.");
 
-                clientManager.removeClient(output);
+        closeInput();
 
-                clientManager.broadcast(
-                        clientName
-                                + " left the chat.");
+        closeOutput();
 
-                output.close();
-            }
+        closeSocket();
 
-            if (input != null) {
+        LoggerUtil.info(
+                clientId + " disconnected.");
+    }
+
+    /**
+     * Closes BufferedReader.
+     */
+    private void closeInput() {
+
+        if (input != null) {
+
+            try {
 
                 input.close();
-            }
 
-            if (socket != null &&
-                    !socket.isClosed()) {
+            } catch (IOException e) {
+
+                LoggerUtil.error(
+                        "Unable to close input.",
+                        e);
+            }
+        }
+    }
+
+    /**
+     * Closes PrintWriter.
+     */
+    private void closeOutput() {
+
+        if (output != null) {
+
+            output.close();
+        }
+    }
+
+    /**
+     * Closes Socket.
+     */
+    private void closeSocket() {
+
+        if (socket != null &&
+                !socket.isClosed()) {
+
+            try {
 
                 socket.close();
+
+            } catch (IOException e) {
+
+                LoggerUtil.error(
+                        "Unable to close socket.",
+                        e);
             }
-
-            System.out.println(
-                    clientName
-                            + " disconnected.");
-
-        } catch (IOException e) {
-
-            System.out.println(
-                    "Cleanup Error : "
-                            + e.getMessage());
         }
     }
 }
