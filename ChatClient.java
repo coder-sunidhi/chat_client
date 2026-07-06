@@ -68,7 +68,7 @@ public class ChatClient extends JFrame {
     }
 
     private void connect() {
-        if (socket != null && socket.isConnected()) {
+        if (isConnected()) {
             JOptionPane.showMessageDialog(this, "Already connected!");
             return;
         }
@@ -79,7 +79,7 @@ public class ChatClient extends JFrame {
             output = new PrintWriter(socket.getOutputStream(), true);
 
             updateStatus("Connected", Color.GREEN);
-            chatArea.append("✅ Connected to server!\n");
+            appendToChat("✅ Connected to server!");
 
             connectButton.setEnabled(false);
             disconnectButton.setEnabled(true);
@@ -91,6 +91,10 @@ public class ChatClient extends JFrame {
         }
     }
 
+    private boolean isConnected() {
+        return socket != null && socket.isConnected() && !socket.isClosed();
+    }
+
     private void startMessageReceiver() {
         receiveThread = new Thread(() -> {
             try {
@@ -99,12 +103,12 @@ public class ChatClient extends JFrame {
                     appendToChat(msg);
                 }
             } catch (IOException e) {
-                if (socket != null && !socket.isClosed()) {
+                if (isConnected()) {
                     appendToChat("⚠️ Connection lost");
                 }
             }
         });
-        receiveThread.start();   // ← Fixed: Thread was not started
+        receiveThread.start();
     }
 
     private void appendToChat(String text) {
@@ -124,21 +128,34 @@ public class ChatClient extends JFrame {
     }
 
     private void disconnect() {
-        try {
-            if (output != null) output.close();
-            if (input != null) input.close();
-            if (socket != null && !socket.isClosed()) socket.close();
-        } catch (IOException ignored) {}
+        if (output != null) {
+            output.println("exit");   // Signal server to clean up
+        }
 
+        closeResources();
         updateStatus("Disconnected", Color.RED);
-        chatArea.append("Disconnected from server.\n");
+        appendToChat("Disconnected from server.");
 
         connectButton.setEnabled(true);
         disconnectButton.setEnabled(false);
+    }
+
+    private void closeResources() {
+        closeQuietly(output);
+        closeQuietly(input);
+        closeQuietly(socket);
 
         output = null;
         input = null;
         socket = null;
+    }
+
+    private void closeQuietly(AutoCloseable resource) {
+        try {
+            if (resource != null) {
+                resource.close();
+            }
+        } catch (Exception ignored) {}
     }
 
     private void updateStatus(String text, Color color) {
