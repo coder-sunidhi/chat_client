@@ -3,35 +3,35 @@ import java.net.*;
 import java.util.concurrent.*;
 
 /**
- * Main Chat Server - Handles multiple clients using multithreading
+ * Main Chat Server
  */
 public class ChatServer {
 
     public static void main(String[] args) {
-        int port = (args.length > 0) ? Integer.parseInt(args[0]) : 5000;
+        int port = args.length > 0 ? Integer.parseInt(args[0]) : 5000;
 
         System.out.println("Server starting on port " + port + "...");
 
-        ExecutorService executor = Executors.newFixedThreadPool(20);
+        ExecutorService executor = Executors.newFixedThreadPool(
+                Runtime.getRuntime().availableProcessors() * 2);
+
         ClientManager clientManager = new ClientManager();
 
         try (ServerSocket serverSocket = new ServerSocket(port)) {
-            System.out.println("✅ Server started successfully on port " + port);
+            System.out.println("✅ Server started successfully!");
 
             while (true) {
-                Socket clientSocket = serverSocket.accept();
-                executor.execute(new ClientHandler(clientSocket, clientManager));
+                Socket socket = serverSocket.accept();
+                executor.execute(new ClientHandler(socket, clientManager));
             }
         } catch (IOException e) {
-            System.err.println("Server failed to start: " + e.getMessage());
-        } finally {
-            executor.shutdown();
+            System.err.println("Server error: " + e.getMessage());
         }
     }
 }
 
 /**
- * Manages all connected clients - Thread-safe
+ * Thread-safe Client Manager
  */
 class ClientManager {
     private final Set<PrintWriter> clientWriters = ConcurrentHashMap.newKeySet();
@@ -46,13 +46,15 @@ class ClientManager {
 
     public void broadcast(String message) {
         for (PrintWriter writer : clientWriters) {
-            writer.println(message);
+            try {
+                writer.println(message);
+            } catch (Exception ignored) {}
         }
     }
 }
 
 /**
- * Handles communication with a single client
+ * Handles individual client connection
  */
 class ClientHandler implements Runnable {
     private final Socket socket;
@@ -67,7 +69,7 @@ class ClientHandler implements Runnable {
 
     @Override
     public void run() {
-        try (BufferedReader input = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+        try (BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
              PrintWriter writer = new PrintWriter(socket.getOutputStream(), true)) {
 
             output = writer;
@@ -77,32 +79,24 @@ class ClientHandler implements Runnable {
             clientManager.broadcast(clientName + " has joined the chat.");
 
             String message;
-            while ((message = input.readLine()) != null) {
-                if ("exit".equalsIgnoreCase(message.trim())) {
-                    break;
-                }
+            while ((message = in.readLine()) != null) {
+                if ("exit".equalsIgnoreCase(message.trim())) break;
                 clientManager.broadcast(clientName + ": " + message);
             }
-        } catch (IOException e) {
-            System.out.println(clientName + " disconnected unexpectedly.");
+        } catch (Exception e) {
+            // Client disconnected
         } finally {
-            cleanupClient();
+            cleanup();
         }
     }
 
-    private void cleanupClient() {
-        if (output != null) {
-            clientManager.removeClient(output);
-        }
-        if (clientName != null) {
-            clientManager.broadcast(clientName + " has left the chat.");
-        }
+    private void cleanup() {
+        if (output != null) clientManager.removeClient(output);
+        if (clientName != null) clientManager.broadcast(clientName + " has left the chat.");
         closeQuietly(socket);
     }
 
     private void closeQuietly(AutoCloseable resource) {
-        try {
-            if (resource != null) resource.close();
-        } catch (Exception ignored) {}
+        try { if (resource != null) resource.close(); } catch (Exception ignored) {}
     }
 }
