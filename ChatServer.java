@@ -6,18 +6,18 @@ public class ChatServer {
 
     public static void main(String[] args) {
         int port = args.length > 0 ? Integer.parseInt(args[0]) : 5000;
-
+        
         System.out.println("Server starting on port " + port + "...");
 
         ExecutorService executor = Executors.newCachedThreadPool();
-        Set<PrintWriter> clientWriters = new CopyOnWriteArraySet<>();
+        ClientManager clientManager = new ClientManager();
 
         try (ServerSocket serverSocket = new ServerSocket(port)) {
-            System.out.println("✅ Server started successfully!");
+            System.out.println("✅ Server started successfully on port " + port);
 
             while (true) {
                 Socket clientSocket = serverSocket.accept();
-                executor.execute(new ClientHandler(clientSocket, clientWriters));
+                executor.execute(new ClientHandler(clientSocket, clientManager));
             }
         } catch (IOException e) {
             System.err.println("Server error: " + e.getMessage());
@@ -25,23 +25,37 @@ public class ChatServer {
             executor.shutdown();
         }
     }
+}
 
-    public static void broadcast(String message, Set<PrintWriter> writers) {
+// Manages all connected clients (Single Responsibility)
+class ClientManager {
+    private final Set<PrintWriter> writers = new CopyOnWriteArraySet<>();
+
+    public void addClient(PrintWriter writer) {
+        writers.add(writer);
+    }
+
+    public void removeClient(PrintWriter writer) {
+        writers.remove(writer);
+    }
+
+    public void broadcast(String message) {
         for (PrintWriter writer : writers) {
             writer.println(message);
         }
     }
 }
 
+// Encapsulated Client Handler
 class ClientHandler implements Runnable {
     private final Socket socket;
-    private final Set<PrintWriter> clientWriters;
+    private final ClientManager clientManager;
     private PrintWriter out;
     private String clientName;
 
-    public ClientHandler(Socket socket, Set<PrintWriter> clientWriters) {
+    public ClientHandler(Socket socket, ClientManager clientManager) {
         this.socket = socket;
-        this.clientWriters = clientWriters;
+        this.clientManager = clientManager;
     }
 
     @Override
@@ -50,21 +64,19 @@ class ClientHandler implements Runnable {
              PrintWriter writer = new PrintWriter(socket.getOutputStream(), true)) {
 
             out = writer;
-            clientWriters.add(out);
-            clientName = "Client-" + clientWriters.size();
+            clientManager.addClient(out);
+            clientName = "Client-" + System.currentTimeMillis() % 10000;
 
             System.out.println(clientName + " connected");
-            ChatServer.broadcast(clientName + " has joined the chat.", clientWriters);
+            clientManager.broadcast(clientName + " has joined the chat.");
 
             String message;
             while ((message = in.readLine()) != null) {
-                if ("exit".equalsIgnoreCase(message.trim())) {
-                    break;
-                }
-                ChatServer.broadcast(clientName + ": " + message, clientWriters);
+                if ("exit".equalsIgnoreCase(message.trim())) break;
+                clientManager.broadcast(clientName + ": " + message);
             }
-        } catch (Exception e) {                    // ← Proper broad exception handling
-            System.out.println("Error with " + clientName + ": " + e.getMessage());
+        } catch (Exception e) {
+            System.out.println("Error in " + clientName + ": " + e.getMessage());
         } finally {
             cleanup();
         }
@@ -72,10 +84,10 @@ class ClientHandler implements Runnable {
 
     private void cleanup() {
         if (out != null) {
-            clientWriters.remove(out);
+            clientManager.removeClient(out);
         }
         if (clientName != null) {
-            ChatServer.broadcast(clientName + " has left the chat.", clientWriters);
+            clientManager.broadcast(clientName + " has left the chat.");
         }
         closeQuietly(socket);
     }
