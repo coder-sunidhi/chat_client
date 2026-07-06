@@ -4,8 +4,7 @@ import java.io.IOException;
 /**
  * Receives messages from the server.
  */
-public class MessageReceiver
-        implements Runnable {
+public class MessageReceiver implements Runnable {
 
     private final BufferedReader input;
 
@@ -24,23 +23,35 @@ public class MessageReceiver
 
         try {
 
-            String message;
-
-            while ((message =
-                    input.readLine()) != null) {
-
-                client.appendMessage(
-                        message);
-            }
+            receiveMessages();
 
         } catch (IOException e) {
 
+            LoggerUtil.error(
+                    "Connection lost.",
+                    e);
+
             client.appendMessage(
-                    "Connection Lost.");
+                    "⚠ Connection lost.");
 
         } finally {
 
             client.serverDisconnected();
+        }
+    }
+
+    /**
+     * Continuously receives messages.
+     */
+    private void receiveMessages()
+            throws IOException {
+
+        String message;
+
+        while ((message =
+                input.readLine()) != null) {
+
+            client.appendMessage(message);
         }
     }
 }
