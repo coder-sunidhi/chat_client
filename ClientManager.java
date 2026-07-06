@@ -1,63 +1,68 @@
 import java.io.PrintWriter;
-import java.util.Set;
-import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Manages all connected clients.
+ * Manages connected clients.
  */
 public class ClientManager {
 
-    private final Set<PrintWriter> clients;
+    private final Map<String, PrintWriter> clients;
 
     public ClientManager() {
 
-        clients = new CopyOnWriteArraySet<>();
+        clients = new ConcurrentHashMap<>();
     }
 
     /**
      * Adds a client.
      */
-    public void addClient(PrintWriter writer) {
+    public void addClient(
+            String clientId,
+            PrintWriter writer) {
 
-        if (writer != null) {
+        if (clientId != null &&
+                writer != null) {
 
-            clients.add(writer);
+            clients.put(
+                    clientId,
+                    writer);
         }
     }
 
     /**
      * Removes a client.
      */
-    public void removeClient(PrintWriter writer) {
+    public void removeClient(
+            String clientId) {
 
-        if (writer != null) {
+        if (clientId != null) {
 
-            clients.remove(writer);
+            clients.remove(clientId);
         }
     }
 
     /**
-     * Broadcasts a message to every client.
+     * Broadcasts a message.
      */
-    public void broadcast(String message) {
+    public void broadcast(
+            String message) {
 
-        for (PrintWriter writer : clients) {
+        for (PrintWriter writer :
+                clients.values()) {
 
             try {
 
                 writer.println(message);
 
-            } catch (Exception e) {
+            } catch (Exception ignored) {
 
-                System.out.println(
-                        "Broadcast Error : "
-                                + e.getMessage());
             }
         }
     }
 
     /**
-     * Returns number of connected clients.
+     * Returns number of clients.
      */
     public int getClientCount() {
 
