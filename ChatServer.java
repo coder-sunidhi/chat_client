@@ -1,57 +1,66 @@
 import java.io.*;
 import java.net.*;
 import java.util.concurrent.*;
-import java.util.logging.*;
 
 public class ChatServer {
-
-    private static final Logger logger = Logger.getLogger(ChatServer.class.getName());
 
     public static void main(String[] args) {
         int port = args.length > 0 ? Integer.parseInt(args[0]) : 5000;
 
-        logger.info("Server starting on port " + port);
+        System.out.println("Server starting on port " + port + "...");
 
-        int poolSize = Runtime.getRuntime().availableProcessors() * 2;
-        ExecutorService executor = Executors.newFixedThreadPool(poolSize);
+        ExecutorService executor = Executors.newFixedThreadPool(
+                Runtime.getRuntime().availableProcessors() * 2);
 
         ClientManager clientManager = new ClientManager();
 
         try (ServerSocket serverSocket = new ServerSocket(port)) {
-            logger.info("✅ Server started successfully!");
+            System.out.println("✅ Server started successfully!");
 
             while (true) {
-                Socket socket = serverSocket.accept();
-                executor.execute(new ClientHandler(socket, clientManager));
+                try {
+                    Socket socket = serverSocket.accept();
+                    executor.execute(new ClientHandler(socket, clientManager));
+                } catch (Exception e) {
+                    System.err.println("Error accepting client: " + e.getMessage());
+                }
             }
         } catch (IOException e) {
-            logger.severe("Server crashed: " + e.getMessage());
+            System.err.println("Server failed to start: " + e.getMessage());
         }
     }
 }
 
 class ClientManager {
-    private final Set<PrintWriter> writers = ConcurrentHashMap.newKeySet();
+    // Fixed: Using CopyOnWriteArraySet for thread-safety
+    private final Set<PrintWriter> clientWriters = new CopyOnWriteArraySet<>();
 
-    public void addClient(PrintWriter w) { writers.add(w); }
-    public void removeClient(PrintWriter w) { writers.remove(w); }
+    public void addClient(PrintWriter writer) {
+        clientWriters.add(writer);
+    }
 
-    public void broadcast(String msg) {
-        for (PrintWriter w : writers) {
-            try { w.println(msg); } catch (Exception ignored) {}
+    public void removeClient(PrintWriter writer) {
+        clientWriters.remove(writer);
+    }
+
+    public void broadcast(String message) {
+        for (PrintWriter writer : clientWriters) {
+            try {
+                writer.println(message);
+            } catch (Exception ignored) {}
         }
     }
 }
 
 class ClientHandler implements Runnable {
     private final Socket socket;
-    private final ClientManager manager;
-    private PrintWriter out;
-    private String name;
+    private final ClientManager clientManager;
+    private PrintWriter output;
+    private String clientName;
 
-    public ClientHandler(Socket socket, ClientManager manager) {
+    public ClientHandler(Socket socket, ClientManager clientManager) {
         this.socket = socket;
-        this.manager = manager;
+        this.clientManager = clientManager;
     }
 
     @Override
@@ -59,32 +68,31 @@ class ClientHandler implements Runnable {
         try (BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
              PrintWriter writer = new PrintWriter(socket.getOutputStream(), true)) {
 
-            out = writer;
-            manager.addClient(out);
-            name = "Client-" + (System.currentTimeMillis() % 10000);
+            output = writer;
+            clientManager.addClient(output);
+            clientName = "Client-" + (System.currentTimeMillis() % 10000);
 
-            manager.broadcast(name + " joined");
-            logger.info(name + " connected");
+            clientManager.broadcast(clientName + " has joined the chat.");
 
-            String msg;
-            while ((msg = in.readLine()) != null) {
-                if ("exit".equalsIgnoreCase(msg.trim())) break;
-                manager.broadcast(name + ": " + msg);
+            String message;
+            while ((message = in.readLine()) != null) {
+                if ("exit".equalsIgnoreCase(message.trim())) break;
+                clientManager.broadcast(clientName + ": " + message);
             }
         } catch (Exception e) {
-            logger.warning(name + " error: " + e.getMessage());
+            System.out.println("Error with " + clientName + ": " + e.getMessage());
         } finally {
             cleanup();
         }
     }
 
     private void cleanup() {
-        if (out != null) manager.removeClient(out);
-        if (name != null) manager.broadcast(name + " left");
+        if (output != null) clientManager.removeClient(output);
+        if (clientName != null) clientManager.broadcast(clientName + " has left the chat.");
         closeQuietly(socket);
     }
 
-    private void closeQuietly(AutoCloseable r) {
-        try { if (r != null) r.close(); } catch (Exception ignored) {}
+    private void closeQuietly(AutoCloseable resource) {
+        try { if (resource != null) resource.close(); } catch (Exception ignored) {}
     }
 }
