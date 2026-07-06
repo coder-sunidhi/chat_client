@@ -68,8 +68,14 @@ public class ClientHandler implements Runnable {
                 clientId,
                 output);
 
-        clientManager.broadcast(
-                clientId + " joined the chat.");
+        String joinMessage =
+        clientId + " joined the chat.";
+
+clientManager.broadcast(
+        joinMessage);
+
+LoggerUtil.info(
+        joinMessage);
 
         LoggerUtil.info(
                 clientId + " connected.");
@@ -104,8 +110,14 @@ public class ClientHandler implements Runnable {
         clientManager.removeClient(
                 clientId);
 
-        clientManager.broadcast(
-                clientId + " left the chat.");
+        String leaveMessage =
+        clientId + " left the chat.";
+
+clientManager.broadcast(
+        leaveMessage);
+
+LoggerUtil.info(
+        leaveMessage);
 
         closeInput();
 
