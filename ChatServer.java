@@ -6,16 +6,18 @@ import java.util.concurrent.*;
 public class ChatServer {
 
     private static final int PORT = 5000;
+    
+    // Better concurrency: CopyOnWriteArraySet
     private static final Set<PrintWriter> clientWriters = 
-            Collections.synchronizedSet(new HashSet<>());
+            ConcurrentHashMap.newKeySet();
 
     public static void main(String[] args) {
         System.out.println("Server starting...");
-        
+
         ExecutorService executor = Executors.newCachedThreadPool();
 
         try (ServerSocket serverSocket = new ServerSocket(PORT)) {
-            System.out.println("Server started on port " + PORT);
+            System.out.println("✅ Server started on port " + PORT);
             System.out.println("Waiting for clients...");
 
             while (true) {
@@ -29,18 +31,14 @@ public class ChatServer {
         }
     }
 
-    // Broadcast message to all connected clients
     public static void broadcast(String message) {
-        synchronized (clientWriters) {
-            for (PrintWriter writer : clientWriters) {
-                writer.println(message);
-            }
+        for (PrintWriter writer : clientWriters) {
+            writer.println(message);
         }
     }
 
-    // Inner class to handle each client
     private static class ClientHandler implements Runnable {
-        private Socket socket;
+        private final Socket socket;
         private PrintWriter out;
         private BufferedReader in;
         private String clientName;
@@ -52,15 +50,11 @@ public class ChatServer {
         @Override
         public void run() {
             try {
-                in = new BufferedReader(
-                        new InputStreamReader(socket.getInputStream()));
+                in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
                 out = new PrintWriter(socket.getOutputStream(), true);
 
-                // Add to active clients
                 clientWriters.add(out);
-
-                // Simple name (can be improved later)
-                clientName = "Client-" + (clientWriters.size());
+                clientName = "Client-" + clientWriters.size();
 
                 System.out.println(clientName + " connected");
                 broadcast(clientName + " has joined the chat.");
@@ -70,20 +64,22 @@ public class ChatServer {
                     if (message.equalsIgnoreCase("exit")) {
                         break;
                     }
-                    System.out.println(clientName + ": " + message);
                     broadcast(clientName + ": " + message);
                 }
-
             } catch (IOException e) {
-                System.out.println(clientName + " connection error");
+                System.out.println(clientName + " error");
             } finally {
                 cleanup();
             }
         }
 
         private void cleanup() {
-            clientWriters.remove(out);
-            broadcast(clientName + " has left the chat.");
+            if (out != null) {
+                clientWriters.remove(out);
+            }
+            if (clientName != null) {
+                broadcast(clientName + " has left the chat.");
+            }
             try {
                 if (socket != null && !socket.isClosed()) {
                     socket.close();
