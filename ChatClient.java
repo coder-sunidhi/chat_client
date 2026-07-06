@@ -128,50 +128,53 @@ public class ChatClient extends JFrame {
 
     private synchronized void disconnectFromServer() {
 
-        running = false;
+    running = false;
+
+    try {
+
+        if (receiveThread != null &&
+                receiveThread.isAlive()) {
+
+            receiveThread.interrupt();
+        }
+
+        if (output != null) {
+            output.println("exit");
+            output.flush();
+        }
+
+    } catch (Exception e) {
+
+        appendToChat(
+                "Disconnect error: "
+                        + e.getMessage());
+
+    } finally {
+
+        closeAllResources();
 
         try {
 
-            if (receiveThread != null &&
-                    receiveThread.isAlive()) {
-
-                receiveThread.interrupt();
+            if (receiveThread != null) {
+                receiveThread.join(1000);
             }
 
-            if (output != null) {
-                output.println("exit");
-                output.flush();
-            }
+        } catch (InterruptedException e) {
 
-        } catch (Exception e) {
+            Thread.currentThread().interrupt();
+        }
+
+        receiveThread = null;
+
+        SwingUtilities.invokeLater(() -> {
+
+            setConnectedState(false);
 
             appendToChat(
-                    "Disconnect error: "
-                            + e.getMessage());
-
-        } finally {
-
-            closeAllResources();
-
-            try {
-
-                if (receiveThread != null) {
-                    receiveThread.join(1000);
-                }
-
-            } catch (InterruptedException e) {
-
-                Thread.currentThread().interrupt();
-            }
-
-            receiveThread = null;
-
-            SwingUtilities.invokeLater(() -> {
-                setConnectedState(false);
-                appendToChat("Disconnected.");
-            });
-        }
+                    "Disconnected from server.");
+        });
     }
+}
 
     private void startReceiverThread() {
 
