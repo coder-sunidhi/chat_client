@@ -339,19 +339,17 @@ public class ChatClient extends JFrame {
 
     public static void main(String[] args) {
 
-        String host =
-                args.length > 0
-                        ? args[0]
-                        : DEFAULT_HOST;
+    String host =
+            args.length > 0
+                    ? args[0]
+                    : DEFAULT_HOST;
 
-        int port =
-                args.length > 1
-                        ? Integer.parseInt(args[1])
-                        : DEFAULT_PORT;
+    int port =
+            args.length > 1
+                    ? Integer.parseInt(args[1])
+                    : DEFAULT_PORT;
 
-        SwingUtilities.invokeLater(
-                () -> new ChatClient(
-                        host,
-                        port));
-    }
+    SwingUtilities.invokeLater(
+            () -> new ChatClient(host, port));
+}
 }
