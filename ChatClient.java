@@ -5,7 +5,11 @@ import java.net.*;
 
 public class ChatClient extends JFrame {
 
-    private static final int DEFAULT_PORT = 5000;
+    private static final String DEFAULT_HOST =
+            "localhost";
+
+    private static final int DEFAULT_PORT =
+            5000;
 
     private final String host;
     private final int port;
@@ -21,7 +25,9 @@ public class ChatClient extends JFrame {
     private BufferedReader input;
 
     private Thread receiveThread;
-    private volatile boolean running;
+
+    private volatile boolean running =
+            false;
 
     public ChatClient(
             String host,
@@ -42,7 +48,6 @@ public class ChatClient extends JFrame {
         setLocationRelativeTo(null);
 
         chatArea = createChatArea();
-
         messageField =
                 new JTextField();
 
@@ -175,7 +180,7 @@ public class ChatClient extends JFrame {
             setConnectedState(true);
 
             appendToChat(
-                    "✅ Connected");
+                    "✅ Connected to server.");
 
             startReceiverThread();
 
@@ -188,44 +193,43 @@ public class ChatClient extends JFrame {
         }
     }
 
-    private void disconnectFromServer() {
+    private synchronized void disconnectFromServer() {
+
+        running = false;
 
         try {
 
-            running = false;
-
             if (output != null) {
+
                 output.println("exit");
                 output.flush();
             }
 
-            if (receiveThread != null
-                    && receiveThread.isAlive()) {
+            closeAllResources();
+
+            if (receiveThread != null &&
+                    receiveThread.isAlive()) {
 
                 receiveThread.interrupt();
 
-                try {
-                    receiveThread.join(1000);
-                } catch (InterruptedException e) {
-                    Thread.currentThread()
-                            .interrupt();
-                }
+                receiveThread.join(1000);
+
+                receiveThread = null;
             }
 
-        } catch (Exception e) {
+        } catch (InterruptedException e) {
 
-            appendToChat(
-                    "Disconnect error: "
-                            + e.getMessage());
+            Thread.currentThread().interrupt();
 
         } finally {
 
-            closeAllResources();
+            SwingUtilities.invokeLater(() -> {
 
-            setConnectedState(false);
+                setConnectedState(false);
 
-            appendToChat(
-                    "Disconnected");
+                appendToChat(
+                        "Disconnected from server.");
+            });
         }
     }
 
@@ -236,21 +240,26 @@ public class ChatClient extends JFrame {
 
                     try {
 
-                        String msg;
+                        String message;
 
-                        while (running
-                                && !Thread.currentThread()
-                                .isInterrupted()
-                                && (msg =
-                                input.readLine())
-                                != null) {
+                        while (running &&
+                                !Thread.currentThread()
+                                        .isInterrupted()) {
 
-                            appendToChat(msg);
+                            message =
+                                    input.readLine();
+
+                            if (message == null)
+                                break;
+
+                            appendToChat(
+                                    message);
                         }
 
                     } catch (IOException e) {
 
                         if (running) {
+
                             appendToChat(
                                     "⚠ Connection lost");
                         }
@@ -261,9 +270,8 @@ public class ChatClient extends JFrame {
 
                         closeAllResources();
 
-                        SwingUtilities
-                                .invokeLater(
-                                        () -> setConnectedState(false));
+                        SwingUtilities.invokeLater(
+                                () -> setConnectedState(false));
                     }
                 });
 
@@ -279,8 +287,8 @@ public class ChatClient extends JFrame {
                         .getText()
                         .trim();
 
-        if (message.isEmpty()
-                || output == null)
+        if (message.isEmpty() ||
+                output == null)
             return;
 
         output.println(message);
@@ -290,25 +298,6 @@ public class ChatClient extends JFrame {
                         + message);
 
         messageField.setText("");
-    }
-
-    private void setConnectedState(
-            boolean connected) {
-
-        connectBtn.setEnabled(
-                !connected);
-
-        disconnectBtn.setEnabled(
-                connected);
-
-        updateStatus(
-                connected
-                        ? "Connected"
-                        : "Disconnected",
-
-                connected
-                        ? Color.GREEN
-                        : Color.RED);
     }
 
     private void closeAllResources() {
@@ -342,6 +331,25 @@ public class ChatClient extends JFrame {
                 && !socket.isClosed();
     }
 
+    private void setConnectedState(
+            boolean connected) {
+
+        connectBtn.setEnabled(
+                !connected);
+
+        disconnectBtn.setEnabled(
+                connected);
+
+        updateStatus(
+                connected
+                        ? "Connected"
+                        : "Disconnected",
+
+                connected
+                        ? Color.GREEN
+                        : Color.RED);
+    }
+
     private void appendToChat(
             String text) {
 
@@ -372,7 +380,7 @@ public class ChatClient extends JFrame {
         String host =
                 args.length > 0
                         ? args[0]
-                        : "localhost";
+                        : DEFAULT_HOST;
 
         int port =
                 args.length > 1
