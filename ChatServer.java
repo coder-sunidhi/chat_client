@@ -16,7 +16,7 @@ public class ChatServer {
         System.out.println("Starting server on port " + port);
 
         ExecutorService executor =
-                Executors.newFixedThreadPool(20);
+                Executors.newCachedThreadPool();
 
         ClientManager clientManager =
                 new ClientManager();
@@ -24,14 +24,14 @@ public class ChatServer {
         try (ServerSocket serverSocket =
                      new ServerSocket(port)) {
 
-            System.out.println(
-                    "✅ Server started successfully");
+            System.out.println("✅ Server started successfully.");
 
             while (true) {
+
                 Socket socket =
                         serverSocket.accept();
 
-                executor.submit(
+                executor.execute(
                         new ClientHandler(
                                 socket,
                                 clientManager));
@@ -48,6 +48,7 @@ public class ChatServer {
             executor.shutdown();
 
             try {
+
                 if (!executor.awaitTermination(
                         5,
                         TimeUnit.SECONDS)) {
@@ -62,132 +63,131 @@ public class ChatServer {
             }
         }
     }
-}
 
-class ClientManager {
+    static class ClientManager {
 
-    private final Set<PrintWriter> clients =
-            new CopyOnWriteArraySet<>();
+        private final Set<PrintWriter> clients =
+                new CopyOnWriteArraySet<>();
 
-    public void addClient(
-            PrintWriter writer) {
+        public void addClient(
+                PrintWriter writer) {
 
-        clients.add(writer);
-    }
+            clients.add(writer);
+        }
 
-    public void removeClient(
-            PrintWriter writer) {
+        public void removeClient(
+                PrintWriter writer) {
 
-        clients.remove(writer);
-    }
+            clients.remove(writer);
+        }
 
-    public void broadcast(
-            String message) {
+        public void broadcast(
+                String message) {
 
-        for (PrintWriter writer : clients) {
-            writer.println(message);
+            for (PrintWriter writer : clients) {
+                writer.println(message);
+            }
         }
     }
-}
 
-class ClientHandler implements Runnable {
+    static class ClientHandler implements Runnable {
 
-    private final Socket socket;
-    private final ClientManager manager;
+        private final Socket socket;
+        private final ClientManager manager;
 
-    private PrintWriter output;
-    private String clientName;
+        private PrintWriter output;
+        private String clientName;
 
-    public ClientHandler(
-            Socket socket,
-            ClientManager manager) {
+        public ClientHandler(
+                Socket socket,
+                ClientManager manager) {
 
-        this.socket = socket;
-        this.manager = manager;
-    }
+            this.socket = socket;
+            this.manager = manager;
+        }
 
-    @Override
-    public void run() {
+        @Override
+        public void run() {
 
-        try (
-                BufferedReader input =
-                        new BufferedReader(
-                                new InputStreamReader(
-                                        socket.getInputStream()));
+            try (
+                    BufferedReader input =
+                            new BufferedReader(
+                                    new InputStreamReader(
+                                            socket.getInputStream()));
 
-                PrintWriter writer =
-                        new PrintWriter(
-                                socket.getOutputStream(),
-                                true)
-        ) {
+                    PrintWriter writer =
+                            new PrintWriter(
+                                    socket.getOutputStream(),
+                                    true)
+            ) {
 
-            output = writer;
+                output = writer;
 
-            manager.addClient(output);
+                manager.addClient(output);
 
-            clientName =
-                    "Client-"
-                            + (System.currentTimeMillis()
-                            % 10000);
-
-            manager.broadcast(
-                    clientName
-                            + " joined the chat.");
-
-            String message;
-
-            while ((message =
-                    input.readLine()) != null) {
-
-                if ("exit".equalsIgnoreCase(
-                        message.trim())) {
-                    break;
-                }
+                clientName =
+                        "Client-"
+                                + (System.currentTimeMillis() % 10000);
 
                 manager.broadcast(
                         clientName
-                                + ": "
-                                + message);
+                                + " joined the chat.");
+
+                String message;
+
+                while ((message =
+                        input.readLine()) != null) {
+
+                    if ("exit".equalsIgnoreCase(
+                            message.trim())) {
+                        break;
+                    }
+
+                    manager.broadcast(
+                            clientName
+                                    + ": "
+                                    + message);
+                }
+
+            } catch (IOException e) {
+
+                System.err.println(
+                        clientName
+                                + " disconnected: "
+                                + e.getMessage());
+
+            } finally {
+
+                cleanup();
+            }
+        }
+
+        private void cleanup() {
+
+            if (output != null) {
+                manager.removeClient(output);
             }
 
-        } catch (IOException e) {
+            if (clientName != null) {
+                manager.broadcast(
+                        clientName
+                                + " left the chat.");
+            }
 
-            System.err.println(
-                    clientName
-                            + " disconnected: "
-                            + e.getMessage());
-
-        } finally {
-
-            cleanup();
-        }
-    }
-
-    private void cleanup() {
-
-        if (output != null) {
-            manager.removeClient(output);
+            closeQuietly(socket);
         }
 
-        if (clientName != null) {
-            manager.broadcast(
-                    clientName
-                            + " left the chat.");
-        }
+        private void closeQuietly(
+                AutoCloseable resource) {
 
-        closeQuietly(socket);
-    }
-
-    private void closeQuietly(
-            AutoCloseable resource) {
-
-        if (resource != null) {
-            try {
-                resource.close();
-            } catch (Exception e) {
-                System.err.println(
-                        "Close error: "
-                                + e.getMessage());
+            if (resource != null) {
+                try {
+                    resource.close();
+                } catch (Exception e) {
+                    System.err.println(
+                            "Close error: "
+                                    + e.getMessage());
+                }
             }
         }
     }
