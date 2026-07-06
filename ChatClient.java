@@ -245,6 +245,8 @@ public class ChatClient extends JFrame {
     private void disconnectFromServer() {
 
         connected = false;
+        LoggerUtil.info(
+        "Disconnect requested by client.");
 
         try {
 
