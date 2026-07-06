@@ -22,25 +22,58 @@ public class ChatServer {
         ClientManager manager =
                 new ClientManager();
 
-        try (ServerSocket server =
-                     new ServerSocket(port)) {
+        try (ServerSocket serverSocket =
+         new ServerSocket(port)) {
 
-            System.out.println(
-                    "Server running on port "
-                            + port);
+    System.out.println(
+            "Server started on port "
+                    + port);
 
-            while (true) {
+    while (true) {
 
-                Socket socket =
-                        server.accept();
+        try {
 
-                executor.execute(
-                        new ClientHandler(
-                                socket,
-                                manager));
-            }
+            Socket socket =
+                    serverSocket.accept();
+
+            executor.execute(
+                    new ClientHandler(
+                            socket,
+                            clientManager));
 
         } catch (IOException e) {
+
+            System.err.println(
+                    "Client accept error: "
+                            + e.getMessage());
+        }
+    }
+
+} catch (IOException e) {
+
+    System.err.println(
+            "Server startup error: "
+                    + e.getMessage());
+
+} finally {
+
+    executor.shutdown();
+
+    try {
+
+        if (!executor.awaitTermination(
+                5,
+                TimeUnit.SECONDS)) {
+
+            executor.shutdownNow();
+        }
+
+    } catch (InterruptedException e) {
+
+        executor.shutdownNow();
+        Thread.currentThread().interrupt();
+    }
+}} catch (IOException e) {
 
             System.err.println(
                     "Server error: "
