@@ -1,60 +1,57 @@
 import java.io.*;
 import java.net.*;
 import java.util.concurrent.*;
+import java.util.logging.*;
 
 public class ChatServer {
+
+    private static final Logger logger = Logger.getLogger(ChatServer.class.getName());
 
     public static void main(String[] args) {
         int port = args.length > 0 ? Integer.parseInt(args[0]) : 5000;
 
-        System.out.println("Server starting on port " + port + "...");
+        logger.info("Server starting on port " + port);
 
-        // Dynamic thread pool
         int poolSize = Runtime.getRuntime().availableProcessors() * 2;
         ExecutorService executor = Executors.newFixedThreadPool(poolSize);
 
         ClientManager clientManager = new ClientManager();
 
         try (ServerSocket serverSocket = new ServerSocket(port)) {
-            System.out.println("✅ Server started successfully!");
+            logger.info("✅ Server started successfully!");
 
             while (true) {
                 Socket socket = serverSocket.accept();
                 executor.execute(new ClientHandler(socket, clientManager));
             }
         } catch (IOException e) {
-            System.err.println("Server error: " + e.getMessage());
+            logger.severe("Server crashed: " + e.getMessage());
         }
     }
 }
 
 class ClientManager {
-    private final Set<PrintWriter> clientWriters = ConcurrentHashMap.newKeySet();
+    private final Set<PrintWriter> writers = ConcurrentHashMap.newKeySet();
 
-    public void addClient(PrintWriter writer) {
-        clientWriters.add(writer);
-    }
+    public void addClient(PrintWriter w) { writers.add(w); }
+    public void removeClient(PrintWriter w) { writers.remove(w); }
 
-    public void removeClient(PrintWriter writer) {
-        clientWriters.remove(writer);
-    }
-
-    public void broadcast(String message) {
-        for (PrintWriter writer : clientWriters) {
-            writer.println(message);
+    public void broadcast(String msg) {
+        for (PrintWriter w : writers) {
+            try { w.println(msg); } catch (Exception ignored) {}
         }
     }
 }
 
 class ClientHandler implements Runnable {
     private final Socket socket;
-    private final ClientManager clientManager;
-    private PrintWriter output;
-    private String clientName;
+    private final ClientManager manager;
+    private PrintWriter out;
+    private String name;
 
-    public ClientHandler(Socket socket, ClientManager clientManager) {
+    public ClientHandler(Socket socket, ClientManager manager) {
         this.socket = socket;
-        this.clientManager = clientManager;
+        this.manager = manager;
     }
 
     @Override
@@ -62,27 +59,28 @@ class ClientHandler implements Runnable {
         try (BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
              PrintWriter writer = new PrintWriter(socket.getOutputStream(), true)) {
 
-            output = writer;
-            clientManager.addClient(output);
-            clientName = "Client-" + (System.currentTimeMillis() % 10000);
+            out = writer;
+            manager.addClient(out);
+            name = "Client-" + (System.currentTimeMillis() % 10000);
 
-            clientManager.broadcast(clientName + " has joined the chat.");
+            manager.broadcast(name + " joined");
+            logger.info(name + " connected");
 
-            String message;
-            while ((message = in.readLine()) != null) {
-                if ("exit".equalsIgnoreCase(message.trim())) break;
-                clientManager.broadcast(clientName + ": " + message);
+            String msg;
+            while ((msg = in.readLine()) != null) {
+                if ("exit".equalsIgnoreCase(msg.trim())) break;
+                manager.broadcast(name + ": " + msg);
             }
         } catch (Exception e) {
-            // Client disconnected
+            logger.warning(name + " error: " + e.getMessage());
         } finally {
             cleanup();
         }
     }
 
     private void cleanup() {
-        if (output != null) clientManager.removeClient(output);
-        if (clientName != null) clientManager.broadcast(clientName + " has left the chat.");
+        if (out != null) manager.removeClient(out);
+        if (name != null) manager.broadcast(name + " left");
         closeQuietly(socket);
     }
 
