@@ -72,6 +72,26 @@ public class ChatServer {
 
         executorService.shutdown();
 
+try {
+
+    if (!executorService.awaitTermination(
+            5,
+            java.util.concurrent.TimeUnit.SECONDS)) {
+
+        executorService.shutdownNow();
+    }
+
+} catch (InterruptedException e) {
+
+    executorService.shutdownNow();
+
+    Thread.currentThread().interrupt();
+
+    LoggerUtil.error(
+            "Executor shutdown interrupted.",
+            e);
+}
+
         LoggerUtil.info(
                 "Executor Service Stopped.");
     }
