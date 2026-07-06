@@ -1,13 +1,14 @@
 import java.io.*;
 import java.net.*;
-import java.util.*;
 import java.util.concurrent.*;
 
 public class ChatServer {
 
     private static final int PORT = 5000;
+    
+    // Best practice: CopyOnWriteArraySet for thread-safe iteration
     private static final Set<PrintWriter> clientWriters = 
-            ConcurrentHashMap.newKeySet();
+            new CopyOnWriteArraySet<>();
 
     public static void main(String[] args) {
         System.out.println("Server starting...");
@@ -51,10 +52,7 @@ public class ChatServer {
                 in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
                 out = new PrintWriter(socket.getOutputStream(), true);
 
-                synchronized (clientWriters) {
-                    clientWriters.add(out);
-                }
-
+                clientWriters.add(out);
                 clientName = "Client-" + clientWriters.size();
 
                 System.out.println(clientName + " connected");
@@ -68,30 +66,26 @@ public class ChatServer {
                     broadcast(clientName + ": " + message);
                 }
             } catch (IOException e) {
-                System.out.println(clientName + " error");
+                // Client disconnected abruptly
             } finally {
                 cleanup();
             }
         }
 
         private void cleanup() {
-            if (out != null) {
-                synchronized (clientWriters) {
-                    clientWriters.remove(out);
-                }
-            }
+            clientWriters.remove(out);
             if (clientName != null) {
                 broadcast(clientName + " has left the chat.");
             }
             closeQuietly(socket);
         }
 
-        private void closeQuietly(Socket s) {
+        private void closeQuietly(AutoCloseable resource) {
             try {
-                if (s != null && !s.isClosed()) {
-                    s.close();
+                if (resource != null) {
+                    resource.close();
                 }
-            } catch (IOException ignored) {}
+            } catch (Exception ignored) {}
         }
     }
 }
