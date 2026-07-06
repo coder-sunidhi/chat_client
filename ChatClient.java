@@ -250,66 +250,14 @@ public class ChatClient extends JFrame {
 
     private void startReceiverThread() {
 
-        receiveThread =
-                new Thread(() -> {
+    receiveThread =
+            new Thread(
+                    new MessageReceiver());
 
-                    try {
+    receiveThread.setDaemon(true);
 
-                        String message;
-
-                        while (running &&
-                                !Thread.currentThread()
-                                        .isInterrupted()) {
-
-                            message =
-                                    input.readLine();
-
-                            if (message == null) {
-
-                                SwingUtilities.invokeLater(() -> {
-
-                                    appendToChat(
-                                            "⚠ Server disconnected.");
-
-                                    setConnectedState(false);
-                                });
-
-                                break;
-                            }
-
-                            appendToChat(message);
-                        }
-
-                    } catch (IOException e) {
-
-                        if (running) {
-
-                            SwingUtilities.invokeLater(() -> {
-
-                                appendToChat(
-                                        "⚠ Connection lost.");
-
-                                setConnectedState(false);
-                            });
-                        }
-
-                    } finally {
-
-                        running = false;
-
-                        closeAllResources();
-
-                        receiveThread = null;
-
-                        SwingUtilities.invokeLater(() ->
-                                setConnectedState(false));
-                    }
-                });
-
-        receiveThread.setDaemon(true);
-
-        receiveThread.start();
-    }
+    receiveThread.start();
+}
 
     private void sendMessage() {
 
@@ -411,6 +359,68 @@ public class ChatClient extends JFrame {
         });
     }
 
+
+    /**
+ * Receives messages from the server.
+ */
+private class MessageReceiver
+        implements Runnable {
+
+    @Override
+    public void run() {
+
+        try {
+
+            String message;
+
+            while (running &&
+                    !Thread.currentThread()
+                            .isInterrupted()) {
+
+                message = input.readLine();
+
+                if (message == null) {
+
+                    SwingUtilities.invokeLater(() -> {
+
+                        appendToChat(
+                                "⚠ Server disconnected.");
+
+                        setConnectedState(false);
+                    });
+
+                    break;
+                }
+
+                appendToChat(message);
+            }
+
+        } catch (IOException e) {
+
+            if (running) {
+
+                SwingUtilities.invokeLater(() -> {
+
+                    appendToChat(
+                            "⚠ Connection lost.");
+
+                    setConnectedState(false);
+                });
+            }
+
+        } finally {
+
+            running = false;
+
+            closeAllResources();
+
+            receiveThread = null;
+
+            SwingUtilities.invokeLater(
+                    () -> setConnectedState(false));
+        }
+    }
+}
     public static void main(
             String[] args) {
 
