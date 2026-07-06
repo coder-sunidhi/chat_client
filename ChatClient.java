@@ -239,3 +239,179 @@ public class ChatClient extends JFrame {
 
         receiverThread.start();
     }
+    /**
+     * Disconnects from the server.
+     */
+    private void disconnectFromServer() {
+
+        connected = false;
+
+        try {
+
+            if (output != null) {
+
+                output.println("exit");
+
+                output.flush();
+            }
+
+        } catch (Exception e) {
+
+            LoggerUtil.error(
+                    "Disconnect failed.",
+                    e);
+
+        } finally {
+
+            closeResources();
+        }
+
+        connectButton.setEnabled(true);
+
+        disconnectButton.setEnabled(false);
+
+        statusLabel.setText("Disconnected");
+
+        statusLabel.setForeground(Color.RED);
+
+        appendMessage(
+                "Disconnected from server.");
+    }
+
+    /**
+     * Sends a message.
+     */
+    private void sendMessage() {
+
+        if (!connected) {
+
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Please connect to the server.");
+
+            return;
+        }
+
+        String message =
+                messageField.getText().trim();
+
+        if (message.isEmpty()) {
+
+            return;
+        }
+
+        try {
+
+            output.println(message);
+
+            output.flush();
+
+            messageField.setText("");
+
+        } catch (Exception e) {
+
+            LoggerUtil.error(
+                    "Unable to send message.",
+                    e);
+
+            appendMessage(
+                    "Unable to send message.");
+        }
+    }
+
+    /**
+     * Displays a message.
+     */
+    public void appendMessage(
+            String message) {
+
+        SwingUtilities.invokeLater(() -> {
+
+            chatArea.append(
+                    message + "\n");
+
+            chatArea.setCaretPosition(
+                    chatArea.getDocument()
+                            .getLength());
+        });
+    }
+
+    /**
+     * Called when the server disconnects.
+     */
+    public void serverDisconnected() {
+
+        connected = false;
+
+        SwingUtilities.invokeLater(() -> {
+
+            connectButton.setEnabled(true);
+
+            disconnectButton.setEnabled(false);
+
+            statusLabel.setText(
+                    "Disconnected");
+
+            statusLabel.setForeground(
+                    Color.RED);
+        });
+
+        closeResources();
+    }
+
+    /**
+     * Closes all resources.
+     */
+    private void closeResources() {
+
+        try {
+
+            if (input != null) {
+
+                input.close();
+            }
+
+        } catch (IOException e) {
+
+            LoggerUtil.error(
+                    "Unable to close input.",
+                    e);
+        }
+
+        if (output != null) {
+
+            output.close();
+        }
+
+        try {
+
+            if (socket != null &&
+                    !socket.isClosed()) {
+
+                socket.close();
+            }
+
+        } catch (IOException e) {
+
+            LoggerUtil.error(
+                    "Unable to close socket.",
+                    e);
+        }
+
+        input = null;
+
+        output = null;
+
+        socket = null;
+    }
+
+    /**
+     * Starts the client.
+     */
+    public static void main(
+            String[] args) {
+
+        SwingUtilities.invokeLater(
+                ChatClient::new);
+    }
+}
