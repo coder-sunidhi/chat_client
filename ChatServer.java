@@ -2,9 +2,6 @@ import java.io.*;
 import java.net.*;
 import java.util.concurrent.*;
 
-/**
- * Main Chat Server
- */
 public class ChatServer {
 
     public static void main(String[] args) {
@@ -12,8 +9,9 @@ public class ChatServer {
 
         System.out.println("Server starting on port " + port + "...");
 
-        ExecutorService executor = Executors.newFixedThreadPool(
-                Runtime.getRuntime().availableProcessors() * 2);
+        // Dynamic thread pool
+        int poolSize = Runtime.getRuntime().availableProcessors() * 2;
+        ExecutorService executor = Executors.newFixedThreadPool(poolSize);
 
         ClientManager clientManager = new ClientManager();
 
@@ -30,9 +28,6 @@ public class ChatServer {
     }
 }
 
-/**
- * Thread-safe Client Manager
- */
 class ClientManager {
     private final Set<PrintWriter> clientWriters = ConcurrentHashMap.newKeySet();
 
@@ -46,16 +41,11 @@ class ClientManager {
 
     public void broadcast(String message) {
         for (PrintWriter writer : clientWriters) {
-            try {
-                writer.println(message);
-            } catch (Exception ignored) {}
+            writer.println(message);
         }
     }
 }
 
-/**
- * Handles individual client connection
- */
 class ClientHandler implements Runnable {
     private final Socket socket;
     private final ClientManager clientManager;
@@ -96,7 +86,7 @@ class ClientHandler implements Runnable {
         closeQuietly(socket);
     }
 
-    private void closeQuietly(AutoCloseable resource) {
-        try { if (resource != null) resource.close(); } catch (Exception ignored) {}
+    private void closeQuietly(AutoCloseable r) {
+        try { if (r != null) r.close(); } catch (Exception ignored) {}
     }
 }
