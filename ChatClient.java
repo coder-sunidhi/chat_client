@@ -1,11 +1,13 @@
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.*;
 import java.io.*;
-import java.net.*;
+import java.net.ConnectException;
+import java.net.Socket;
+import java.net.SocketTimeoutException;
+import java.net.UnknownHostException;
 
 /**
- * Simple Chat Client
+ * Chat Client Application
  */
 public class ChatClient extends JFrame {
 
@@ -22,10 +24,12 @@ public class ChatClient extends JFrame {
     private JLabel statusLabel;
 
     private Socket socket;
+
     private BufferedReader input;
+
     private PrintWriter output;
 
-    private Thread receiveThread;
+    private Thread receiverThread;
 
     private boolean connected;
 
@@ -37,13 +41,13 @@ public class ChatClient extends JFrame {
     }
 
     /**
-     * Creates GUI.
+     * Builds the Swing UI.
      */
     private void initializeUI() {
 
-        setTitle("Java Chat Client");
+        setTitle("Chat Client");
 
-        setSize(700,550);
+        setSize(700, 550);
 
         setLocationRelativeTo(null);
 
@@ -54,7 +58,8 @@ public class ChatClient extends JFrame {
         chatArea.setEditable(false);
 
         chatArea.setFont(
-                new Font("Arial",
+                new Font(
+                        "Arial",
                         Font.PLAIN,
                         14));
 
@@ -101,13 +106,16 @@ public class ChatClient extends JFrame {
                 statusLabel,
                 BorderLayout.SOUTH);
 
-        add(topPanel,
+        add(
+                topPanel,
                 BorderLayout.NORTH);
 
-        add(scrollPane,
+        add(
+                scrollPane,
                 BorderLayout.CENTER);
 
-        add(bottomPanel,
+        add(
+                bottomPanel,
                 BorderLayout.SOUTH);
 
         connectButton.addActionListener(
@@ -126,7 +134,7 @@ public class ChatClient extends JFrame {
     }
 
     /**
-     * Connects to server.
+     * Connects to the chat server.
      */
     private void connectToServer() {
 
@@ -138,7 +146,9 @@ public class ChatClient extends JFrame {
         try {
 
             socket =
-                    new Socket(HOST, PORT);
+                    new Socket(
+                            HOST,
+                            PORT);
 
             input =
                     new BufferedReader(
@@ -161,65 +171,57 @@ public class ChatClient extends JFrame {
             statusLabel.setForeground(Color.GREEN);
 
             appendMessage(
-                    "Connected to Server.");
+                    "Connected to server.");
+
+            LoggerUtil.info(
+                    "Connected to server.");
 
             startReceiverThread();
 
         } catch (UnknownHostException e) {
 
+            LoggerUtil.error(
+                    "Unknown host.",
+                    e);
+
             appendMessage(
-                    "Unknown Host.");
+                    "Unknown host.");
+
+            closeResources();
 
         } catch (ConnectException e) {
 
+            LoggerUtil.error(
+                    "Server unavailable.",
+                    e);
+
             appendMessage(
-                    "Server is Offline.");
+                    "Server unavailable.");
+
+            closeResources();
 
         } catch (SocketTimeoutException e) {
 
+            LoggerUtil.error(
+                    "Connection timed out.",
+                    e);
+
             appendMessage(
-                    "Connection Timed Out.");
+                    "Connection timed out.");
+
+            closeResources();
 
         } catch (IOException e) {
 
+            LoggerUtil.error(
+                    "Connection failed.",
+                    e);
+
             appendMessage(
-                    "Connection Failed.");
+                    "Unable to connect.");
 
-        } finally {
-
-            if (!connected) {
-
-                closeResources();
-            }
+            closeResources();
         }
-    }
-    /**
-     * Disconnects from the server.
-     */
-    private void disconnectFromServer() {
-
-        connected = false;
-
-        try {
-
-            if (output != null) {
-
-                output.println("exit");
-                output.flush();
-            }
-
-        } catch (Exception ignored) {
-        }
-
-        closeResources();
-
-        connectButton.setEnabled(true);
-        disconnectButton.setEnabled(false);
-
-        statusLabel.setText("Disconnected");
-        statusLabel.setForeground(Color.RED);
-
-        appendMessage("Disconnected from server.");
     }
 
     /**
@@ -227,138 +229,13 @@ public class ChatClient extends JFrame {
      */
     private void startReceiverThread() {
 
-        receiveThread =
+        receiverThread =
                 new Thread(
                         new MessageReceiver(
                                 input,
                                 this));
 
-        receiveThread.start();
+        receiverThread.setDaemon(true);
+
+        receiverThread.start();
     }
-
-    /**
-     * Sends message.
-     */
-    private void sendMessage() {
-
-        if (!connected) {
-
-            JOptionPane.showMessageDialog(
-                    this,
-                    "Please connect first.");
-
-            return;
-        }
-
-        String message =
-                messageField.getText().trim();
-
-        if (message.isEmpty()) {
-
-            return;
-        }
-
-        try {
-
-            output.println(message);
-
-            appendMessage(
-                    "You : " + message);
-
-            messageField.setText("");
-
-        } catch (Exception e) {
-
-            appendMessage(
-                    "Unable to send message.");
-        }
-    }
-
-    /**
-     * Displays message.
-     */
-    public void appendMessage(
-            String message) {
-
-        SwingUtilities.invokeLater(() -> {
-
-            chatArea.append(
-                    message + "\n");
-
-            chatArea.setCaretPosition(
-                    chatArea.getDocument()
-                            .getLength());
-
-        });
-    }
-
-    /**
-     * Called by MessageReceiver when server disconnects.
-     */
-    public void serverDisconnected() {
-
-        connected = false;
-
-        SwingUtilities.invokeLater(() -> {
-
-            connectButton.setEnabled(true);
-
-            disconnectButton.setEnabled(false);
-
-            statusLabel.setText(
-                    "Disconnected");
-
-            statusLabel.setForeground(
-                    Color.RED);
-        });
-
-        closeResources();
-    }
-
-    /**
-     * Closes all resources.
-     */
-    private void closeResources() {
-
-        try {
-
-            if (input != null) {
-
-                input.close();
-            }
-
-        } catch (Exception ignored) {
-        }
-
-        if (output != null) {
-
-            output.close();
-        }
-
-        try {
-
-            if (socket != null &&
-                    !socket.isClosed()) {
-
-                socket.close();
-            }
-
-        } catch (Exception ignored) {
-        }
-
-        input = null;
-        output = null;
-        socket = null;
-    }
-
-    /**
-     * Starts application.
-     */
-    public static void main(
-            String[] args) {
-
-        SwingUtilities.invokeLater(
-                ChatClient::new);
-    }
-}
-
