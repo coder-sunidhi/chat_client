@@ -19,7 +19,7 @@ public class ChatClient extends JFrame {
     private PrintWriter output;
     private BufferedReader input;
     private Thread receiveThread;
-    private volatile boolean running = false;   // ← Volatile flag for clean shutdown
+    private volatile boolean running = false;
 
     public ChatClient(String host, int port) {
         this.host = host;
@@ -103,31 +103,30 @@ public class ChatClient extends JFrame {
                     appendToChat(msg);
                 }
             } catch (IOException e) {
-                if (running) {
-                    appendToChat("⚠️ Connection lost");
-                }
+                if (running) appendToChat("⚠️ Connection lost");
             }
         });
         receiveThread.start();
     }
 
     private void disconnect() {
-        running = false;                    // Signal thread to stop
-        if (output != null) output.println("exit");
+        running = false;
+        if (output != null) {
+            try { output.println("exit"); } catch (Exception ignored) {}
+        }
 
         if (receiveThread != null) {
-            try {
-                receiveThread.join(800);
-            } catch (InterruptedException ignored) {}
+            try { receiveThread.join(500); } catch (InterruptedException ignored) {}
         }
 
         closeResources();
 
+        // Ensure button is disabled
+        disconnectButton.setEnabled(false);   // ← Fixed as per feedback
+        connectButton.setEnabled(true);
+
         updateStatus("Disconnected", Color.RED);
         appendToChat("Disconnected from server.");
-
-        connectButton.setEnabled(true);
-        disconnectButton.setEnabled(false);
     }
 
     private void closeResources() {
@@ -170,7 +169,6 @@ public class ChatClient extends JFrame {
     public static void main(String[] args) {
         String host = args.length > 0 ? args[0] : "localhost";
         int port = args.length > 1 ? Integer.parseInt(args[1]) : 5000;
-
         SwingUtilities.invokeLater(() -> new ChatClient(host, port));
     }
 }
