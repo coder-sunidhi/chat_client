@@ -6,7 +6,7 @@ public class ChatServer {
 
     public static void main(String[] args) {
         int port = args.length > 0 ? Integer.parseInt(args[0]) : 5000;
-        
+
         System.out.println("Server starting on port " + port + "...");
 
         ExecutorService executor = Executors.newCachedThreadPool();
@@ -26,7 +26,6 @@ public class ChatServer {
         }
     }
 
-    // Separate class for broadcasting
     public static void broadcast(String message, Set<PrintWriter> writers) {
         for (PrintWriter writer : writers) {
             writer.println(message);
@@ -34,7 +33,6 @@ public class ChatServer {
     }
 }
 
-// Focused Client Handler
 class ClientHandler implements Runnable {
     private final Socket socket;
     private final Set<PrintWriter> clientWriters;
@@ -65,8 +63,8 @@ class ClientHandler implements Runnable {
                 }
                 ChatServer.broadcast(clientName + ": " + message, clientWriters);
             }
-        } catch (IOException e) {
-            // Client disconnected
+        } catch (Exception e) {                    // ← Proper broad exception handling
+            System.out.println("Error with " + clientName + ": " + e.getMessage());
         } finally {
             cleanup();
         }
