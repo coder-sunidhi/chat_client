@@ -13,7 +13,7 @@ public class ChatServer {
                 ? Integer.parseInt(args[0])
                 : DEFAULT_PORT;
 
-        System.out.println("Starting server on port " + port);
+        System.out.println("Starting server on port " + port + "...");
 
         ExecutorService executor =
                 Executors.newCachedThreadPool();
@@ -24,7 +24,8 @@ public class ChatServer {
         try (ServerSocket serverSocket =
                      new ServerSocket(port)) {
 
-            System.out.println("✅ Server started successfully.");
+            System.out.println(
+                    "✅ Server started successfully!");
 
             while (true) {
 
@@ -85,12 +86,20 @@ public class ChatServer {
                 String message) {
 
             for (PrintWriter writer : clients) {
-                writer.println(message);
+
+                try {
+                    writer.println(message);
+                } catch (Exception e) {
+                    System.err.println(
+                            "Broadcast error: "
+                                    + e.getMessage());
+                }
             }
         }
     }
 
-    static class ClientHandler implements Runnable {
+    static class ClientHandler
+            implements Runnable {
 
         private final Socket socket;
         private final ClientManager manager;
@@ -127,7 +136,8 @@ public class ChatServer {
 
                 clientName =
                         "Client-"
-                                + (System.currentTimeMillis() % 10000);
+                                + (System.currentTimeMillis()
+                                % 10000);
 
                 manager.broadcast(
                         clientName
@@ -181,9 +191,13 @@ public class ChatServer {
                 AutoCloseable resource) {
 
             if (resource != null) {
+
                 try {
+
                     resource.close();
+
                 } catch (Exception e) {
+
                     System.err.println(
                             "Close error: "
                                     + e.getMessage());
