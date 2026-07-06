@@ -2,6 +2,7 @@ import java.io.*;
 import java.net.*;
 import java.util.Set;
 import java.util.concurrent.*;
+import java.util.UUID;
 
 public class ChatServer {
 
@@ -148,8 +149,10 @@ public class ChatServer {
                 manager.addClient(output);
 
                 clientName =
-                        "Client-"
-                                + (System.currentTimeMillis() % 10000);
+        "Client-"
+                + UUID.randomUUID()
+                        .toString()
+                        .substring(0, 8);
 
                 manager.broadcast(
                         clientName
