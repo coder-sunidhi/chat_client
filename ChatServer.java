@@ -3,9 +3,6 @@ import java.net.*;
 import java.util.Set;
 import java.util.concurrent.*;
 
-/**
- * Multi-client Chat Server
- */
 public class ChatServer {
 
     private static final int DEFAULT_PORT = 5000;
@@ -18,29 +15,48 @@ public class ChatServer {
 
         System.out.println("Starting server on port " + port);
 
-        ExecutorService executor = Executors.newCachedThreadPool();
-        ClientManager clientManager = new ClientManager();
+        ExecutorService executor =
+                Executors.newFixedThreadPool(20);
 
-        try (ServerSocket serverSocket = new ServerSocket(port)) {
+        ClientManager clientManager =
+                new ClientManager();
 
-            System.out.println("✅ Server started successfully.");
+        try (ServerSocket serverSocket =
+                     new ServerSocket(port)) {
+
+            System.out.println(
+                    "✅ Server started successfully");
 
             while (true) {
-                Socket socket = serverSocket.accept();
-                executor.execute(
-                        new ClientHandler(socket, clientManager));
+                Socket socket =
+                        serverSocket.accept();
+
+                executor.submit(
+                        new ClientHandler(
+                                socket,
+                                clientManager));
             }
 
         } catch (IOException e) {
-            System.err.println("Server error: " + e.getMessage());
+
+            System.err.println(
+                    "Server error: "
+                            + e.getMessage());
+
         } finally {
+
             executor.shutdown();
 
             try {
-                if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+                if (!executor.awaitTermination(
+                        5,
+                        TimeUnit.SECONDS)) {
+
                     executor.shutdownNow();
                 }
+
             } catch (InterruptedException e) {
+
                 executor.shutdownNow();
                 Thread.currentThread().interrupt();
             }
@@ -48,46 +64,46 @@ public class ChatServer {
     }
 }
 
-/**
- * Thread-safe client manager
- */
 class ClientManager {
 
-    private final Set<PrintWriter> clientWriters =
+    private final Set<PrintWriter> clients =
             new CopyOnWriteArraySet<>();
 
-    public void addClient(PrintWriter writer) {
-        clientWriters.add(writer);
+    public void addClient(
+            PrintWriter writer) {
+
+        clients.add(writer);
     }
 
-    public void removeClient(PrintWriter writer) {
-        clientWriters.remove(writer);
+    public void removeClient(
+            PrintWriter writer) {
+
+        clients.remove(writer);
     }
 
-    public void broadcast(String message) {
-        for (PrintWriter writer : clientWriters) {
+    public void broadcast(
+            String message) {
+
+        for (PrintWriter writer : clients) {
             writer.println(message);
         }
     }
 }
 
-/**
- * Handles a single client
- */
 class ClientHandler implements Runnable {
 
     private final Socket socket;
-    private final ClientManager clientManager;
+    private final ClientManager manager;
 
     private PrintWriter output;
     private String clientName;
 
     public ClientHandler(
             Socket socket,
-            ClientManager clientManager) {
+            ClientManager manager) {
 
         this.socket = socket;
-        this.clientManager = clientManager;
+        this.manager = manager;
     }
 
     @Override
@@ -106,33 +122,43 @@ class ClientHandler implements Runnable {
         ) {
 
             output = writer;
-            clientManager.addClient(output);
+
+            manager.addClient(output);
 
             clientName =
-                    "Client-" +
-                    (System.currentTimeMillis() % 10000);
+                    "Client-"
+                            + (System.currentTimeMillis()
+                            % 10000);
 
-            clientManager.broadcast(
-                    clientName + " joined the chat.");
+            manager.broadcast(
+                    clientName
+                            + " joined the chat.");
 
             String message;
 
-            while ((message = input.readLine()) != null) {
+            while ((message =
+                    input.readLine()) != null) {
 
                 if ("exit".equalsIgnoreCase(
                         message.trim())) {
                     break;
                 }
 
-                clientManager.broadcast(
-                        clientName + ": " + message);
+                manager.broadcast(
+                        clientName
+                                + ": "
+                                + message);
             }
 
         } catch (IOException e) {
-            System.out.println(
-                    clientName +
-                    " disconnected unexpectedly.");
+
+            System.err.println(
+                    clientName
+                            + " disconnected: "
+                            + e.getMessage());
+
         } finally {
+
             cleanup();
         }
     }
@@ -140,22 +166,29 @@ class ClientHandler implements Runnable {
     private void cleanup() {
 
         if (output != null) {
-            clientManager.removeClient(output);
+            manager.removeClient(output);
         }
 
         if (clientName != null) {
-            clientManager.broadcast(
-                    clientName + " left the chat.");
+            manager.broadcast(
+                    clientName
+                            + " left the chat.");
         }
 
         closeQuietly(socket);
     }
 
-    private void closeQuietly(AutoCloseable resource) {
-        try {
-            if (resource != null)
+    private void closeQuietly(
+            AutoCloseable resource) {
+
+        if (resource != null) {
+            try {
                 resource.close();
-        } catch (Exception ignored) {
+            } catch (Exception e) {
+                System.err.println(
+                        "Close error: "
+                                + e.getMessage());
+            }
         }
     }
 }
