@@ -4,7 +4,7 @@ import java.io.*;
 import java.net.*;
 
 /**
- * GUI Chat Client with robust connection management
+ * Chat Client with improved connection management
  */
 public class ChatClient extends JFrame {
 
@@ -20,16 +20,16 @@ public class ChatClient extends JFrame {
     private Socket socket;
     private PrintWriter output;
     private BufferedReader input;
-    private Thread messageReceiverThread;
+    private Thread receiverThread;
     private volatile boolean isRunning = false;
 
     public ChatClient(String host, int port) {
         this.serverHost = host;
         this.serverPort = port;
-        initializeUserInterface();
+        initializeUI();
     }
 
-    private void initializeUserInterface() {
+    private void initializeUI() {
         setTitle("Chat Client");
         setSize(700, 550);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -46,42 +46,39 @@ public class ChatClient extends JFrame {
 
         add(new JScrollPane(chatDisplay), BorderLayout.CENTER);
         add(createTopPanel(), BorderLayout.NORTH);
-        add(createInputPanel(), BorderLayout.SOUTH);
+        add(createBottomPanel(), BorderLayout.SOUTH);
 
-        setupEventListeners();
+        setupListeners();
         setVisible(true);
     }
 
     private JPanel createTopPanel() {
-        JPanel panel = new JPanel();
-        panel.add(connectBtn);
-        panel.add(disconnectBtn);
+        JPanel p = new JPanel();
+        p.add(connectBtn);
+        p.add(disconnectBtn);
         disconnectBtn.setEnabled(false);
+        return p;
+    }
+
+    private JPanel createBottomPanel() {
+        JPanel inputPanel = new JPanel(new BorderLayout());
+        inputPanel.add(messageInput, BorderLayout.CENTER);
+        inputPanel.add(new JButton("Send"){{addActionListener(e -> sendMessage());}}, BorderLayout.EAST);
+
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.add(inputPanel, BorderLayout.CENTER);
+        panel.add(statusLabel, BorderLayout.SOUTH);
         return panel;
     }
 
-    private JPanel createInputPanel() {
-        JPanel panel = new JPanel(new BorderLayout());
-        panel.add(messageInput, BorderLayout.CENTER);
-        panel.add(new JButton("Send") {{ addActionListener(e -> sendMessage()); }}, BorderLayout.EAST);
-
-        JPanel container = new JPanel(new BorderLayout());
-        container.add(panel, BorderLayout.CENTER);
-        container.add(statusLabel, BorderLayout.SOUTH);
-        return container;
-    }
-
-    private void setupEventListeners() {
+    private void setupListeners() {
         connectBtn.addActionListener(e -> connectToServer());
         disconnectBtn.addActionListener(e -> disconnectFromServer());
         messageInput.addActionListener(e -> sendMessage());
     }
 
     private void connectToServer() {
-        if (isConnected()) {
-            JOptionPane.showMessageDialog(this, "Already connected!");
-            return;
-        }
+        if (isConnected()) return;
 
         try {
             socket = new Socket(serverHost, serverPort);
@@ -95,27 +92,25 @@ public class ChatClient extends JFrame {
             connectBtn.setEnabled(false);
             disconnectBtn.setEnabled(true);
 
-            startMessageReceiver();
+            startReceiverThread();
 
         } catch (IOException e) {
             JOptionPane.showMessageDialog(this, "Connection failed: " + e.getMessage());
         }
     }
 
-    private void startMessageReceiver() {
-        messageReceiverThread = new Thread(() -> {
+    private void startReceiverThread() {
+        receiverThread = new Thread(() -> {
             try {
-                String serverMessage;
-                while (isRunning && (serverMessage = input.readLine()) != null) {
-                    appendMessage(serverMessage);
+                String msg;
+                while (isRunning && (msg = input.readLine()) != null) {
+                    appendMessage(msg);
                 }
             } catch (IOException e) {
-                if (isRunning) {
-                    appendMessage("⚠️ Connection lost");
-                }
+                if (isRunning) appendMessage("⚠️ Connection lost");
             }
         });
-        messageReceiverThread.start();
+        receiverThread.start();
     }
 
     private void disconnectFromServer() {
@@ -125,22 +120,22 @@ public class ChatClient extends JFrame {
             try { output.println("exit"); } catch (Exception ignored) {}
         }
 
-        if (messageReceiverThread != null) {
+        if (receiverThread != null) {
             try {
-                messageReceiverThread.interrupt();
-                messageReceiverThread.join(800);
-            } catch (Exception e) {
-                // Thread stop handled safely
-            }
+                receiverThread.interrupt();
+                receiverThread.join(600);
+            } catch (Exception ignored) {}
         }
 
-        closeAllResources();
-
-        disconnectBtn.setEnabled(false);
-        connectBtn.setEnabled(true);
-
-        updateStatus("Disconnected", Color.RED);
-        appendMessage("Disconnected from server.");
+        // Finally block for resource cleanup
+        try {
+            closeAllResources();
+        } finally {
+            disconnectBtn.setEnabled(false);
+            connectBtn.setEnabled(true);
+            updateStatus("Disconnected", Color.RED);
+            appendMessage("Disconnected from server.");
+        }
     }
 
     private void closeAllResources() {
@@ -162,9 +157,9 @@ public class ChatClient extends JFrame {
         return socket != null && !socket.isClosed();
     }
 
-    private void appendMessage(String message) {
+    private void appendMessage(String msg) {
         SwingUtilities.invokeLater(() -> {
-            chatDisplay.append(message + "\n");
+            chatDisplay.append(msg + "\n");
             chatDisplay.setCaretPosition(chatDisplay.getDocument().getLength());
         });
     }
@@ -172,21 +167,19 @@ public class ChatClient extends JFrame {
     private void sendMessage() {
         String text = messageInput.getText().trim();
         if (text.isEmpty() || output == null) return;
-
         output.println(text);
         appendMessage("You: " + text);
         messageInput.setText("");
     }
 
-    private void updateStatus(String status, Color color) {
-        statusLabel.setText(status);
+    private void updateStatus(String text, Color color) {
+        statusLabel.setText(text);
         statusLabel.setForeground(color);
     }
 
     public static void main(String[] args) {
         String host = args.length > 0 ? args[0] : "localhost";
         int port = args.length > 1 ? Integer.parseInt(args[1]) : 5000;
-
         SwingUtilities.invokeLater(() -> new ChatClient(host, port));
     }
 }
