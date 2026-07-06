@@ -1,4 +1,5 @@
 import java.io.PrintWriter;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -7,7 +8,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class ClientManager {
 
-    private final Map<String, PrintWriter> clients;
+    private final ConcurrentHashMap<String, PrintWriter> clients;
 
     public ClientManager() {
 
@@ -27,6 +28,10 @@ public class ClientManager {
             clients.put(
                     clientId,
                     writer);
+
+            LoggerUtil.info(
+                    "Client Added : "
+                            + clientId);
         }
     }
 
@@ -38,34 +43,65 @@ public class ClientManager {
 
         if (clientId != null) {
 
-            clients.remove(clientId);
+            PrintWriter writer =
+                    clients.remove(clientId);
+
+            if (writer != null) {
+
+                writer.close();
+            }
+
+            LoggerUtil.info(
+                    "Client Removed : "
+                            + clientId);
         }
     }
 
     /**
-     * Broadcasts a message.
+     * Sends a message to every connected client.
      */
     public void broadcast(
             String message) {
 
-        for (PrintWriter writer :
-                clients.values()) {
+        Iterator<Map.Entry<String, PrintWriter>> iterator =
+                clients.entrySet().iterator();
+
+        while (iterator.hasNext()) {
+
+            Map.Entry<String, PrintWriter> entry =
+                    iterator.next();
 
             try {
 
+                PrintWriter writer =
+                        entry.getValue();
+
                 writer.println(message);
 
-            } catch (Exception ignored) {
+                if (writer.checkError()) {
 
+                    removeClient(
+                            entry.getKey());
+                }
+
+            } catch (Exception e) {
+
+                LoggerUtil.error(
+                        "Broadcast Failed",
+                        e);
+
+                removeClient(
+                        entry.getKey());
             }
         }
     }
 
     /**
-     * Returns number of clients.
+     * Returns connected client count.
      */
     public int getClientCount() {
 
         return clients.size();
     }
+
 }
