@@ -48,6 +48,7 @@ public class ChatClient extends JFrame {
         setLocationRelativeTo(null);
 
         chatArea = createChatArea();
+
         messageField =
                 new JTextField();
 
@@ -249,8 +250,14 @@ public class ChatClient extends JFrame {
                             message =
                                     input.readLine();
 
-                            if (message == null)
+                            // Server disconnected
+                            if (message == null) {
+
+                                appendToChat(
+                                        "⚠ Server disconnected.");
+
                                 break;
+                            }
 
                             appendToChat(
                                     message);
@@ -261,7 +268,8 @@ public class ChatClient extends JFrame {
                         if (running) {
 
                             appendToChat(
-                                    "⚠ Connection lost");
+                                    "⚠ Connection lost: "
+                                            + e.getMessage());
                         }
 
                     } finally {
@@ -270,8 +278,13 @@ public class ChatClient extends JFrame {
 
                         closeAllResources();
 
-                        SwingUtilities.invokeLater(
-                                () -> setConnectedState(false));
+                        SwingUtilities.invokeLater(() -> {
+
+                            setConnectedState(false);
+
+                            appendToChat(
+                                    "Disconnected from server.");
+                        });
                     }
                 });
 
@@ -287,9 +300,10 @@ public class ChatClient extends JFrame {
                         .getText()
                         .trim();
 
-        if (message.isEmpty() ||
-                output == null)
+        if (message.isEmpty()
+                || output == null) {
             return;
+        }
 
         output.println(message);
 
@@ -315,9 +329,13 @@ public class ChatClient extends JFrame {
             AutoCloseable resource) {
 
         if (resource != null) {
+
             try {
+
                 resource.close();
+
             } catch (Exception e) {
+
                 System.err.println(
                         "Close error: "
                                 + e.getMessage());
@@ -353,17 +371,15 @@ public class ChatClient extends JFrame {
     private void appendToChat(
             String text) {
 
-        SwingUtilities.invokeLater(
-                () -> {
+        SwingUtilities.invokeLater(() -> {
 
-                    chatArea.append(
-                            text + "\n");
+            chatArea.append(
+                    text + "\n");
 
-                    chatArea.setCaretPosition(
-                            chatArea
-                                    .getDocument()
-                                    .getLength());
-                });
+            chatArea.setCaretPosition(
+                    chatArea.getDocument()
+                            .getLength());
+        });
     }
 
     private void updateStatus(
@@ -384,8 +400,7 @@ public class ChatClient extends JFrame {
 
         int port =
                 args.length > 1
-                        ? Integer.parseInt(
-                        args[1])
+                        ? Integer.parseInt(args[1])
                         : DEFAULT_PORT;
 
         SwingUtilities.invokeLater(
