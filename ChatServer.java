@@ -9,7 +9,8 @@ public class ChatServer {
 
         System.out.println("Server starting on port " + port + "...");
 
-        ExecutorService executor = Executors.newCachedThreadPool();
+        // Using fixed thread pool as per suggestion
+        ExecutorService executor = Executors.newFixedThreadPool(20);
         ClientManager clientManager = new ClientManager();
 
         try (ServerSocket serverSocket = new ServerSocket(port)) {
@@ -21,21 +22,19 @@ public class ChatServer {
             }
         } catch (IOException e) {
             System.err.println("Server error: " + e.getMessage());
-        } finally {
-            executor.shutdown();
         }
     }
 }
 
-// Responsible only for managing clients
+// Thread-safe Client Manager
 class ClientManager {
-    private final Set<PrintWriter> writers = new CopyOnWriteArraySet<>();
+    private final Set<PrintWriter> writers = ConcurrentHashMap.newKeySet();
 
-    public synchronized void addClient(PrintWriter writer) {   // Added synchronized
+    public void addClient(PrintWriter writer) {
         writers.add(writer);
     }
 
-    public synchronized void removeClient(PrintWriter writer) { // Added synchronized
+    public void removeClient(PrintWriter writer) {
         writers.remove(writer);
     }
 
@@ -46,7 +45,6 @@ class ClientManager {
     }
 }
 
-// Focused on handling one client
 class ClientHandler implements Runnable {
     private final Socket socket;
     private final ClientManager clientManager;
@@ -67,36 +65,27 @@ class ClientHandler implements Runnable {
             clientManager.addClient(out);
             clientName = "Client-" + (System.currentTimeMillis() % 10000);
 
-            System.out.println(clientName + " connected");
             clientManager.broadcast(clientName + " has joined the chat.");
 
             String message;
             while ((message = in.readLine()) != null) {
-                if ("exit".equalsIgnoreCase(message.trim())) {
-                    break;
-                }
+                if ("exit".equalsIgnoreCase(message.trim())) break;
                 clientManager.broadcast(clientName + ": " + message);
             }
         } catch (Exception e) {
-            System.out.println("Error with " + clientName);
+            // Silent handling
         } finally {
             cleanup();
         }
     }
 
     private void cleanup() {
-        if (out != null) {
-            clientManager.removeClient(out);
-        }
-        if (clientName != null) {
-            clientManager.broadcast(clientName + " has left the chat.");
-        }
+        if (out != null) clientManager.removeClient(out);
+        if (clientName != null) clientManager.broadcast(clientName + " has left the chat.");
         closeQuietly(socket);
     }
 
-    private void closeQuietly(AutoCloseable resource) {
-        try {
-            if (resource != null) resource.close();
-        } catch (Exception ignored) {}
+    private void closeQuietly(AutoCloseable r) {
+        try { if (r != null) r.close(); } catch (Exception ignored) {}
     }
 }
