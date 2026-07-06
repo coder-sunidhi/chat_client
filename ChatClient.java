@@ -302,11 +302,13 @@ public class ChatClient extends JFrame {
 
         try {
 
-            output.println(message);
+output.println(message);
 
-            output.flush();
+output.flush();
 
-            messageField.setText("");
+appendMessage("You : " + message);
+
+messageField.setText("");
 
         } catch (Exception e) {
 
@@ -360,50 +362,74 @@ public class ChatClient extends JFrame {
     }
 
     /**
-     * Closes all resources.
-     */
-    private void closeResources() {
+ * Closes all resources safely.
+ */
+private void closeResources() {
 
-        try {
+    try {
 
-            if (input != null) {
+        if (input != null) {
 
-                input.close();
-            }
-
-        } catch (IOException e) {
-
-            LoggerUtil.error(
-                    "Unable to close input.",
-                    e);
+            input.close();
         }
 
-        if (output != null) {
+    } catch (IOException e) {
 
-            output.close();
-        }
-
-        try {
-
-            if (socket != null &&
-                    !socket.isClosed()) {
-
-                socket.close();
-            }
-
-        } catch (IOException e) {
-
-            LoggerUtil.error(
-                    "Unable to close socket.",
-                    e);
-        }
+        LoggerUtil.error(
+                "Unable to close input stream.",
+                e);
+    } finally {
 
         input = null;
+    }
+
+    if (output != null) {
+
+        output.close();
 
         output = null;
+    }
+
+    try {
+
+        if (socket != null &&
+                !socket.isClosed()) {
+
+            socket.close();
+        }
+
+    } catch (IOException e) {
+
+        LoggerUtil.error(
+                "Unable to close socket.",
+                e);
+
+    } finally {
 
         socket = null;
     }
+
+    if (receiverThread != null &&
+            receiverThread.isAlive()) {
+
+        receiverThread.interrupt();
+
+        try {
+
+            receiverThread.join(500);
+
+        } catch (InterruptedException e) {
+
+            Thread.currentThread().interrupt();
+
+            LoggerUtil.error(
+                    "Receiver thread interruption failed.",
+                    e);
+        }
+
+        receiverThread = null;
+    }
+}
 
     /**
      * Starts the client.
