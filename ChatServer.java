@@ -2,6 +2,9 @@ import java.io.*;
 import java.net.*;
 import java.util.concurrent.*;
 
+/**
+ * Chat Server - Accepts multiple clients and broadcasts messages
+ */
 public class ChatServer {
 
     public static void main(String[] args) {
@@ -15,15 +18,11 @@ public class ChatServer {
         ClientManager clientManager = new ClientManager();
 
         try (ServerSocket serverSocket = new ServerSocket(port)) {
-            System.out.println("✅ Server started successfully!");
+            System.out.println("✅ Server started successfully on port " + port);
 
             while (true) {
-                try {
-                    Socket socket = serverSocket.accept();
-                    executor.execute(new ClientHandler(socket, clientManager));
-                } catch (Exception e) {
-                    System.err.println("Error accepting client: " + e.getMessage());
-                }
+                Socket socket = serverSocket.accept();
+                executor.execute(new ClientHandler(socket, clientManager));
             }
         } catch (IOException e) {
             System.err.println("Server failed to start: " + e.getMessage());
@@ -31,8 +30,10 @@ public class ChatServer {
     }
 }
 
+/**
+ * Manages connected clients in a thread-safe manner
+ */
 class ClientManager {
-    // Fixed: Using CopyOnWriteArraySet for thread-safety
     private final Set<PrintWriter> clientWriters = new CopyOnWriteArraySet<>();
 
     public void addClient(PrintWriter writer) {
@@ -52,6 +53,9 @@ class ClientManager {
     }
 }
 
+/**
+ * Handles communication with one individual client
+ */
 class ClientHandler implements Runnable {
     private final Socket socket;
     private final ClientManager clientManager;
@@ -76,11 +80,13 @@ class ClientHandler implements Runnable {
 
             String message;
             while ((message = in.readLine()) != null) {
-                if ("exit".equalsIgnoreCase(message.trim())) break;
+                if ("exit".equalsIgnoreCase(message.trim())) {
+                    break;
+                }
                 clientManager.broadcast(clientName + ": " + message);
             }
         } catch (Exception e) {
-            System.out.println("Error with " + clientName + ": " + e.getMessage());
+            System.out.println("Error with " + clientName);
         } finally {
             cleanup();
         }
@@ -93,6 +99,8 @@ class ClientHandler implements Runnable {
     }
 
     private void closeQuietly(AutoCloseable resource) {
-        try { if (resource != null) resource.close(); } catch (Exception ignored) {}
+        try {
+            if (resource != null) resource.close();
+        } catch (Exception ignored) {}
     }
 }
